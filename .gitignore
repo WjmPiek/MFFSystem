@@ -8,3 +8,11 @@ storage/uploads/*
 storage/exports/*
 !storage/uploads/**/.gitkeep
 !storage/exports/**/.gitkeep
+# Virtual environments
+venv/
+backend/venv/
+# Node
+node_modules/
+
+# Env files
+.env
