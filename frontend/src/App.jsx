@@ -2,72 +2,37 @@ import { useEffect, useMemo, useState } from 'react'
 import './assets/styles/globals.css'
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+const STORAGE_KEY = 'martinsdirect_auth'
 
-const demoAccounts = {
-  superuser: { email: 'wjm@martinsdirect.com', firstLogin: false, displayName: 'Wjm', title: 'System Administrator' },
-  franchisee: { email: 'franchisee@martinsdirect.com', firstLogin: true, displayName: 'Franchisee User', title: 'Franchise Owner' },
-  manager: { email: 'manager@martinsdirect.com', firstLogin: false, displayName: 'Manager User', title: 'Franchise Manager' },
-  agent: { email: 'agent@martinsdirect.com', firstLogin: false, displayName: 'Agent User', title: 'Sales Agent' }
-}
-
-const navForRole = {
-  superuser: {
-    main: ['Dashboard', 'Franchise', 'Payments', 'Admin Settings'],
-    franchise: ['Reports Dashboard', 'Upload Bank Statement', 'Auto Match Payments', 'Unmatched Payments', 'Employees'],
-    payments: ['Receipt Generation']
-  },
-  franchisee: {
-    main: ['Dashboard', 'Franchise', 'Payments'],
-    franchise: ['Reports Dashboard', 'Upload Bank Statement', 'Auto Match Payments', 'Unmatched Payments', 'Employees'],
-    payments: ['Receipt Generation']
-  },
-  manager: {
-    main: ['Dashboard', 'Franchise', 'Payments'],
-    franchise: ['Upload Bank Statement', 'Auto Match Payments', 'Unmatched Payments', 'Employees'],
-    payments: ['Receipt Generation']
-  },
-  agent: {
-    main: ['Dashboard', 'Franchise', 'Payments'],
-    franchise: ['Upload Bank Statement', 'Auto Match Payments', 'Unmatched Payments', 'Employees'],
-    payments: ['Receipt Generation']
-  },
-  user: {
-    main: ['Dashboard', 'Franchise', 'Payments'],
-    franchise: ['Employees'],
-    payments: ['Receipt Generation']
-  }
-}
-
-const employeesAccess = {
-  superuser: 'Can see all franchisees, managers, and agents across the system. View-focused oversight for all records.',
-  franchisee: 'Can add, edit, and deactivate any record under their franchise.',
-  manager: 'Can add and edit records under their franchise, but cannot deactivate them.',
-  agent: 'Can add records only under their franchise.',
-  user: 'Can view the dashboard and limited franchise records.'
-}
-
-function toTitleCase(value) {
-  return value
-    .toLowerCase()
-    .split(' ')
-    .filter(Boolean)
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
-}
-
-function getApiUrl(path) {
+function apiUrl(path) {
   return API_BASE_URL ? `${API_BASE_URL}${path}` : path
+}
+
+async function apiFetch(path, options = {}, token) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {}),
+  }
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+
+  const response = await fetch(apiUrl(path), { ...options, headers })
+  const data = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    throw new Error(data.error || data.message || 'Request failed.')
+  }
+
+  return data
 }
 
 function Logo({ small = false }) {
   const [failed, setFailed] = useState(false)
 
   if (failed) {
-    return (
-      <div className={small ? 'logo-fallback logo-fallback-small' : 'logo-fallback'}>
-        MD
-      </div>
-    )
+    return <div className={small ? 'logo-fallback logo-fallback-small' : 'logo-fallback'}>MD</div>
   }
 
   return (
@@ -80,141 +45,81 @@ function Logo({ small = false }) {
   )
 }
 
-function LoginScreen({ onLogin }) {
+function LoginScreen({ onLogin, onOpenReset }) {
   const [email, setEmail] = useState('wjm@martinsdirect.com')
   const [password, setPassword] = useState('Renette7')
   const [showPassword, setShowPassword] = useState(false)
-  const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
   const handleSubmit = async (event) => {
     event.preventDefault()
-    setIsSubmitting(true)
+    setSubmitting(true)
     setError('')
-
     try {
-      const response = await fetch(getApiUrl('/api/auth/login'), {
+      const data = await apiFetch('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password }),
       })
-
-      const data = await response.json().catch(() => ({}))
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Sign in failed. Please try again.')
-      }
-
-      onLogin(data.user, { rememberMe })
+      onLogin(data)
     } catch (err) {
-      setError(err.message || 'Unable to sign in right now.')
+      setError(err.message)
     } finally {
-      setIsSubmitting(false)
+      setSubmitting(false)
     }
   }
 
   return (
     <div className="auth-shell">
       <div className="auth-backdrop" />
-
       <div className="auth-card">
         <section className="auth-brand-panel">
           <div className="auth-brand-top">
             <Logo />
-            <span className="auth-badge">Secure Admin Access</span>
+            <span className="auth-badge">Mobile-ready secure dashboard</span>
           </div>
-
           <div>
             <p className="auth-eyebrow">Martinsdirect Management Platform</p>
-            <h1>Professional admin login for your operations dashboard.</h1>
+            <h1>Sign in to manage users, payments, reports, and statements.</h1>
             <p className="auth-copy">
-              Sign in to manage franchise operations, payments, employee records, and platform settings from one secure workspace.
+              Admin manages the full platform. Franchisees can upload bank PDFs, allocate payments, and edit transactions.
             </p>
           </div>
-
           <div className="auth-feature-list">
-            <div className="auth-feature-item">
-              <strong>Role-based access</strong>
-              <span>Administrator access configured for your Martinsdirect account.</span>
-            </div>
-            <div className="auth-feature-item">
-              <strong>Centralized control</strong>
-              <span>Monitor statements, unmatched payments, employees, and receipts.</span>
-            </div>
-            <div className="auth-feature-item">
-              <strong>Trusted sign-in</strong>
-              <span>Now connected to the backend login API instead of a hardcoded browser-only check.</span>
-            </div>
+            <div className="auth-feature-item"><strong>Admin</strong><span>Full editing, user management, reports, password resets.</span></div>
+            <div className="auth-feature-item"><strong>Franchisee</strong><span>Statement uploads, payment allocation, transaction edits.</span></div>
+            <div className="auth-feature-item"><strong>User</strong><span>Read-only dashboard access.</span></div>
           </div>
         </section>
 
         <section className="auth-form-panel">
           <div className="auth-form-header">
-            <p className="auth-form-kicker">Administrator sign in</p>
+            <p className="auth-form-kicker">Secure sign in</p>
             <h2>Welcome back</h2>
-            <p>Use your Martinsdirect admin email and password to continue.</p>
+            <p>Use your Martinsdirect account details.</p>
           </div>
-
           <form className="auth-form" onSubmit={handleSubmit}>
             <div className="form-group auth-form-group">
-              <label htmlFor="email">Email address</label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="wjm@martinsdirect.com"
-                autoComplete="username"
-              />
+              <label htmlFor="email">Email</label>
+              <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
             </div>
-
             <div className="form-group auth-form-group">
               <label htmlFor="password">Password</label>
               <div className="password-field">
-                <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Enter your password"
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  className="password-toggle"
-                  onClick={() => setShowPassword((value) => !value)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
+                <input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+                <button type="button" className="password-toggle" onClick={() => setShowPassword((v) => !v)}>
                   {showPassword ? 'Hide' : 'Show'}
                 </button>
               </div>
             </div>
-
-            <div className="auth-options-row">
-              <label className="checkbox-row">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(event) => setRememberMe(event.target.checked)}
-                />
-                <span>Remember this device</span>
-              </label>
-
-              <a href="#" className="reset-link">Forgot password?</a>
-            </div>
-
             {error ? <div className="auth-error">{error}</div> : null}
-
-            <button type="submit" className="primary-auth-btn" disabled={isSubmitting}>
-              {isSubmitting ? 'Signing in...' : 'Sign in to dashboard'}
-            </button>
+            <button className="primary-auth-btn" type="submit" disabled={submitting}>{submitting ? 'Signing in...' : 'Sign in'}</button>
           </form>
-
           <div className="auth-footer-note">
-            <strong>Default admin seed</strong>
-            <span>{demoAccounts.superuser.email}</span>
-            <small>Set ADMIN_EMAIL and ADMIN_PASSWORD on Render to change this.</small>
+            <strong>Default seeded admin</strong>
+            <span>wjm@martinsdirect.com</span>
+            <small>Use Forgot password to generate a reset token in non-production mode.</small>
+            <button type="button" className="link-btn" onClick={onOpenReset}>Forgot password?</button>
           </div>
         </section>
       </div>
@@ -222,388 +127,382 @@ function LoginScreen({ onLogin }) {
   )
 }
 
-function FirstTimeSetup({ onComplete }) {
-  const [franchiseName] = useState('Martins North')
-  const [taName, setTaName] = useState('')
-  const [ownerName, setOwnerName] = useState('')
-  const [email, setEmail] = useState('franchisee@martinsdirect.com')
-  const [phone, setPhone] = useState('')
-  const [hotline, setHotline] = useState('')
-  const [officeAddress, setOfficeAddress] = useState('')
+function ResetPasswordModal({ open, onClose, token, onTokenChange }) {
+  const [email, setEmail] = useState('wjm@martinsdirect.com')
+  const [newPassword, setNewPassword] = useState('')
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const franchiseCode = useMemo(() => {
-    const code = (franchiseName || 'FRA').replace(/[^a-zA-Z]/g, '').slice(0, 3).toUpperCase()
-    return `${code || 'FRA'}001`
-  }, [franchiseName])
+  if (!open) return null
+
+  const requestReset = async () => {
+    setLoading(true)
+    setMessage('')
+    try {
+      const data = await apiFetch('/api/auth/request-reset', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      })
+      if (data.reset_token) onTokenChange(data.reset_token)
+      setMessage(data.reset_token ? `Reset token: ${data.reset_token}` : data.message)
+    } catch (err) {
+      setMessage(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const resetPassword = async () => {
+    setLoading(true)
+    setMessage('')
+    try {
+      const data = await apiFetch('/api/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ token, new_password: newPassword }),
+      })
+      setMessage(data.message)
+      setNewPassword('')
+    } catch (err) {
+      setMessage(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
-    <div className="page-shell">
-      <div className="setup-header">
-        <div>
-          <h1>First-Time Franchisee Setup</h1>
-          <p>Complete your franchise profile before entering the system.</p>
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="panel-header"><div><h2>Password reset</h2><p>Generate a token, then reset the password.</p></div></div>
+        <div className="form-group"><label>Email</label><input value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+        <button className="btn btn-secondary" type="button" onClick={requestReset} disabled={loading}>Generate reset token</button>
+        <div className="grid-two">
+          <div className="form-group"><label>Token</label><input value={token} onChange={(e) => onTokenChange(e.target.value)} /></div>
+          <div className="form-group"><label>New password</label><input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></div>
         </div>
-        <span className="pill">Franchise code: {franchiseCode}</span>
-      </div>
-
-      <div className="panel">
-        <div className="panel-header">
-          <div>
-            <h2>Franchise Profile</h2>
-            <p>Franchise name is preloaded by superuser. Add the remaining business and banking information.</p>
-          </div>
-        </div>
-
-        <div className="setup-grid">
-          <div className="col-stack">
-            <div className="form-group">
-              <label>Franchise Name</label>
-              <input value={franchiseName} readOnly />
-            </div>
-            <div className="form-group">
-              <label>T/A Name</label>
-              <input value={taName} onChange={(e) => setTaName(e.target.value)} />
-            </div>
-            <div className="grid-two">
-              <div className="form-group"><label>Pty / CK Number</label><input /></div>
-              <div className="form-group"><label>VAT Number</label><input /></div>
-            </div>
-            <div className="form-group">
-              <label>Owner / Full Name and Surname</label>
-              <input value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
-            </div>
-            <div className="grid-two">
-              <div className="form-group"><label>Email</label><input value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-              <div className="form-group"><label>Phone Number</label><input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
-            </div>
-            <div className="grid-two">
-              <div className="form-group"><label>24 Hour Number</label><input value={hotline} onChange={(e) => setHotline(e.target.value)} /></div>
-              <div className="form-group"><label>Password</label><input type="password" defaultValue="demo123" /></div>
-            </div>
-            <div className="form-group">
-              <label>Office Address</label>
-              <input value={officeAddress} onChange={(e) => setOfficeAddress(e.target.value)} />
-            </div>
-          </div>
-
-          <div className="col-stack">
-            <div className="sub-panel">
-              <h3>Bank Details: Insurance</h3>
-              <div className="form-group"><label>Bank</label><input /></div>
-              <div className="form-group"><label>Account Number</label><input /></div>
-              <div className="form-group"><label>Branch</label><input /></div>
-            </div>
-            <div className="sub-panel">
-              <h3>Bank Details: Business</h3>
-              <div className="form-group"><label>Bank</label><input /></div>
-              <div className="form-group"><label>Account Number</label><input /></div>
-              <div className="form-group"><label>Branch</label><input /></div>
-            </div>
-            <div className="sub-panel">
-              <h3>Branding</h3>
-              <p>Upload your franchise logo to be used on receipts and reports.</p>
-              <input type="file" />
-            </div>
-          </div>
-        </div>
-
         <div className="panel-actions">
-          <button className="btn btn-primary" onClick={onComplete}>Save and Continue</button>
+          <button className="btn btn-primary" type="button" onClick={resetPassword} disabled={loading}>Reset password</button>
+          <button className="btn btn-secondary" type="button" onClick={onClose}>Close</button>
+        </div>
+        {message ? <div className="auth-error auth-info">{message}</div> : null}
+      </div>
+    </div>
+  )
+}
+
+function StatCard({ label, value }) {
+  return <div className="stat-card"><span>{label}</span><strong>{value}</strong></div>
+}
+
+function OverviewPanel({ user, reports }) {
+  return (
+    <div className="content-grid">
+      <StatCard label="Signed in role" value={user.role} />
+      <StatCard label="Users" value={reports?.totals?.users ?? '-'} />
+      <StatCard label="Payments" value={reports?.totals?.payments ?? '-'} />
+      <div className="panel full-span">
+        <div className="panel-header"><div><h2>Role access</h2><p>Platform permissions are enforced on the backend and reflected in the UI.</p></div></div>
+        <div className="badge-row">
+          <span className="pill">Admin: full control</span>
+          <span className="pill">Franchisee: upload bank PDFs, allocate payments, edit transactions</span>
+          <span className="pill">User: read only</span>
         </div>
       </div>
     </div>
   )
 }
 
-function DashboardShell({ role, currentUser, onLogout }) {
-  const [activeMain, setActiveMain] = useState('Dashboard')
-  const [activeSub, setActiveSub] = useState('Employees')
-  const [employeeName, setEmployeeName] = useState('')
-  const [employeeEmail, setEmployeeEmail] = useState('')
-  const [employeePhone, setEmployeePhone] = useState('')
-  const [employeeRole, setEmployeeRole] = useState('agent')
-  const [searchTerm, setSearchTerm] = useState('')
-  const [roleFilter, setRoleFilter] = useState('all')
-  const [employees, setEmployees] = useState([
-    { id: 1, fullName: 'Sarah Ndlovu', email: 'sarah@martinsdirect.com', role: 'franchisee', phone: '082 555 0142', branch: 'Pretoria East' },
-    { id: 2, fullName: 'Michael Jacobs', email: 'michael@martinsdirect.com', role: 'manager', phone: '082 555 0164', branch: 'Pretoria East' },
-    { id: 3, fullName: 'Thandi Mokoena', email: 'thandi@martinsdirect.com', role: 'agent', phone: '082 555 0181', branch: 'Pretoria North' }
-  ])
+function PaymentsPanel({ token, role }) {
+  const [payments, setPayments] = useState([])
+  const [error, setError] = useState('')
+  const [uploadRows, setUploadRows] = useState('[{"payer_name":"Delta Retail","reference":"DELTA-1004","amount":1499.99,"franchise_name":"Pretoria West"}]')
+  const canEdit = role === 'admin' || role === 'franchisee'
 
-  const nav = navForRole[role] || navForRole.user
-  const roleLabel = role === 'superuser' ? 'Admin' : toTitleCase(role)
-  const accountProfile = currentUser || demoAccounts[role] || {}
-  const loggedInName = accountProfile?.name || accountProfile?.displayName || roleLabel
-
-  const filteredEmployees = employees.filter((employee) => {
-    const matchesSearch = [employee.fullName, employee.email, employee.branch]
-      .join(' ')
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase())
-
-    const matchesRole = roleFilter === 'all' || employee.role === roleFilter
-    return matchesSearch && matchesRole
-  })
-
-  const handleAddEmployee = () => {
-    if (!employeeName.trim() || !employeeEmail.trim()) return
-
-    const newEmployee = {
-      id: Date.now(),
-      fullName: employeeName.trim(),
-      email: employeeEmail.trim(),
-      role: employeeRole,
-      phone: employeePhone.trim() || 'Not provided',
-      branch: role === 'superuser' ? 'System-wide' : 'Assigned franchise'
+  const loadPayments = async () => {
+    try {
+      const data = await apiFetch('/api/payments', {}, token)
+      setPayments(data)
+      setError('')
+    } catch (err) {
+      setError(err.message)
     }
-
-    setEmployees((current) => [newEmployee, ...current])
-    setEmployeeName('')
-    setEmployeeEmail('')
-    setEmployeePhone('')
-    setEmployeeRole(role === 'agent' ? 'agent' : 'manager')
   }
 
-  const handleDeleteEmployee = (id) => {
-    setEmployees((current) => current.filter((employee) => employee.id !== id))
+  useEffect(() => {
+    if (canEdit) loadPayments()
+  }, [token, role])
+
+  const uploadStatement = async () => {
+    try {
+      const rows = JSON.parse(uploadRows)
+      await apiFetch('/api/payments/upload-statement', {
+        method: 'POST',
+        body: JSON.stringify({ filename: 'manual-import.json', transactions: rows }),
+      }, token)
+      loadPayments()
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
-  const renderContent = () => {
-    if (activeMain === 'Dashboard') {
-      return (
-        <div className="content-grid">
-          <div className="stat-card"><span>Total Employees</span><strong>{employees.length}</strong></div>
-          <div className="stat-card"><span>System Role</span><strong>{roleLabel}</strong></div>
-          <div className="stat-card"><span>Admin Access</span><strong>{role === 'superuser' ? 'Enabled' : 'Limited'}</strong></div>
-          <div className="panel full-span">
-            <div className="panel-header">
-              <div>
-                <h2>Welcome to Martinsdirect</h2>
-                <p>Use the navigation to manage employees, payments, reports, and platform settings.</p>
-              </div>
-            </div>
-            <div className="badge-row">
-              <span className="pill">Role: {roleLabel}</span>
-              <span className="pill pill-soft">{employeesAccess[role] || employeesAccess.user}</span>
-            </div>
-          </div>
-        </div>
-      )
-    }
+  const allocate = async (payment) => {
+    const allocatedTo = window.prompt('Allocate to', payment.allocated_to || 'Franchise Fee')
+    if (!allocatedTo) return
+    await apiFetch(`/api/payments/${payment.id}/allocate`, {
+      method: 'PUT',
+      body: JSON.stringify({ allocated_to: allocatedTo }),
+    }, token)
+    loadPayments()
+  }
 
-    if (activeMain === 'Franchise' && activeSub === 'Employees') {
-      return (
-        <div className="panel">
-          <div className="panel-header">
-            <div>
-              <h2>Employees</h2>
-              <p>{employeesAccess[role] || employeesAccess.user}</p>
-            </div>
-          </div>
+  const editPayment = async (payment) => {
+    const reference = window.prompt('New reference', payment.reference)
+    if (!reference) return
+    await apiFetch(`/api/payments/${payment.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ reference, status: 'edited' }),
+    }, token)
+    loadPayments()
+  }
 
-          <div className="employees-grid">
-            <div className="sub-panel">
-              <h3>Add Employee</h3>
-              <div className="form-group"><label>Full Name</label><input value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} placeholder="Enter full name" /></div>
-              <div className="form-group"><label>Email</label><input value={employeeEmail} onChange={(e) => setEmployeeEmail(e.target.value)} placeholder="Enter email address" /></div>
-              <div className="grid-two">
-                <div className="form-group"><label>Phone Number</label><input value={employeePhone} onChange={(e) => setEmployeePhone(e.target.value)} placeholder="Enter phone number" /></div>
-                <div className="form-group">
-                  <label>Role</label>
-                  <select value={employeeRole} onChange={(e) => setEmployeeRole(e.target.value)}>
-                    {['franchisee', 'manager', 'agent'].map((option) => (
-                      <option key={option} value={option}>{toTitleCase(option)}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <button className="btn btn-primary" onClick={handleAddEmployee}>Add Employee</button>
-            </div>
-
-            <div className="sub-panel">
-              <div className="toolbar">
-                <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search employees" />
-                <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
-                  <option value="all">All roles</option>
-                  <option value="franchisee">Franchisee</option>
-                  <option value="manager">Manager</option>
-                  <option value="agent">Agent</option>
-                </select>
-              </div>
-
-              <div className="employee-list">
-                {filteredEmployees.map((employee) => (
-                  <div key={employee.id} className="employee-item">
-                    <div>
-                      <strong>{employee.fullName}</strong>
-                      <p>{employee.email}</p>
-                      <span>{toTitleCase(employee.role)} · {employee.branch}</span>
-                    </div>
-                    <button className="btn btn-danger" onClick={() => handleDeleteEmployee(employee.id)}>Delete</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )
-    }
-
-    if (activeMain === 'Payments') {
-      return (
-        <div className="panel">
-          <div className="panel-header">
-            <div>
-              <h2>Receipt Generation</h2>
-              <p>Create payment receipts for employee records.</p>
-            </div>
-          </div>
-          <div className="grid-two">
-            <div className="form-group"><label>Employee Name</label><input placeholder="Employee name" /></div>
-            <div className="form-group"><label>Amount</label><input placeholder="Amount paid" /></div>
-            <div className="form-group"><label>Receipt Number</label><input placeholder="Receipt reference" /></div>
-            <div className="form-group"><label>Date</label><input type="date" /></div>
-          </div>
-          <button className="btn btn-primary">Generate Receipt</button>
-        </div>
-      )
-    }
-
-    if (activeMain === 'Admin Settings') {
-      return (
-        <div className="panel">
-          <div className="panel-header">
-            <div>
-              <h2>Admin Settings</h2>
-              <p>Manage branding, support email, and general platform preferences.</p>
-            </div>
-          </div>
-          <div className="grid-two">
-            <div className="form-group"><label>System Name</label><input defaultValue="Martinsdirect Platform" /></div>
-            <div className="form-group"><label>Support Email</label><input defaultValue="support@martinsdirect.com" /></div>
-            <div className="form-group"><label>Theme</label><select defaultValue="light"><option value="light">Light</option><option value="dark">Dark</option></select></div>
-            <div className="form-group"><label>Logo</label><input type="file" /></div>
-          </div>
-          <button className="btn btn-primary">Save Settings</button>
-        </div>
-      )
-    }
-
-    return (
-      <div className="panel">
-        <div className="panel-header">
-          <div>
-            <h2>{activeSub}</h2>
-            <p>This section is available in the navigation and ready for detailed module development.</p>
-          </div>
-        </div>
-      </div>
-    )
+  if (!canEdit) {
+    return <div className="panel"><h2>Payments</h2><p>Users can view the dashboard but cannot manage payment records.</p></div>
   }
 
   return (
-    <div className="dashboard-shell">
-      <aside className="sidebar">
+    <div className="stack-lg">
+      <div className="panel">
+        <div className="panel-header"><div><h2>Upload bank statement</h2><p>Paste JSON rows to simulate imported bank PDF transactions for this deployment build.</p></div></div>
+        <div className="form-group"><label>Transactions JSON</label><textarea className="text-area" value={uploadRows} onChange={(e) => setUploadRows(e.target.value)} /></div>
+        <button className="btn btn-primary" type="button" onClick={uploadStatement}>Import transactions</button>
+      </div>
+      <div className="panel">
+        <div className="panel-header"><div><h2>Transactions</h2><p>Allocate or edit imported transactions.</p></div></div>
+        {error ? <div className="auth-error">{error}</div> : null}
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead><tr><th>Payer</th><th>Reference</th><th>Amount</th><th>Status</th><th>Allocated</th><th>Actions</th></tr></thead>
+            <tbody>
+              {payments.map((payment) => (
+                <tr key={payment.id}>
+                  <td>{payment.payer_name}</td>
+                  <td>{payment.reference}</td>
+                  <td>R {Number(payment.amount).toFixed(2)}</td>
+                  <td>{payment.status}</td>
+                  <td>{payment.allocated_to || '-'}</td>
+                  <td className="action-cell">
+                    <button className="btn btn-secondary btn-small" type="button" onClick={() => allocate(payment)}>Allocate</button>
+                    <button className="btn btn-secondary btn-small" type="button" onClick={() => editPayment(payment)}>Edit</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function UserManagementPanel({ token, role }) {
+  const [users, setUsers] = useState([])
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'user', is_active: true })
+  const [error, setError] = useState('')
+
+  const loadUsers = async () => {
+    try {
+      const data = await apiFetch('/api/users', {}, token)
+      setUsers(data)
+      setError('')
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  useEffect(() => {
+    if (role === 'admin') loadUsers()
+  }, [token, role])
+
+  const createUser = async () => {
+    try {
+      await apiFetch('/api/users', { method: 'POST', body: JSON.stringify(form) }, token)
+      setForm({ name: '', email: '', password: '', role: 'user', is_active: true })
+      loadUsers()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  const resetPassword = async (user) => {
+    const newPassword = window.prompt(`New password for ${user.email}`)
+    if (!newPassword) return
+    await apiFetch(`/api/users/${user.id}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ new_password: newPassword }),
+    }, token)
+    loadUsers()
+  }
+
+  const toggleActive = async (user) => {
+    await apiFetch(`/api/users/${user.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ is_active: !user.is_active }),
+    }, token)
+    loadUsers()
+  }
+
+  if (role !== 'admin') {
+    return <div className="panel"><h2>User management</h2><p>Only admin can manage users and reset passwords.</p></div>
+  }
+
+  return (
+    <div className="employees-grid">
+      <div className="panel">
+        <div className="panel-header"><div><h2>Create user</h2><p>Add admin, franchisee, or user accounts.</p></div></div>
+        <div className="form-group"><label>Name</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+        <div className="form-group"><label>Email</label><input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+        <div className="grid-two">
+          <div className="form-group"><label>Password</label><input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
+          <div className="form-group"><label>Role</label><select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}><option value="user">User</option><option value="franchisee">Franchisee</option><option value="admin">Admin</option></select></div>
+        </div>
+        <button className="btn btn-primary" type="button" onClick={createUser}>Create user</button>
+        {error ? <div className="auth-error">{error}</div> : null}
+      </div>
+      <div className="panel">
+        <div className="panel-header"><div><h2>Existing users</h2><p>Admin-only account management.</p></div></div>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+              {users.map((user) => (
+                <tr key={user.id}>
+                  <td>{user.name}</td><td>{user.email}</td><td>{user.role}</td><td>{user.is_active ? 'Active' : 'Disabled'}</td>
+                  <td className="action-cell">
+                    <button className="btn btn-secondary btn-small" type="button" onClick={() => toggleActive(user)}>{user.is_active ? 'Disable' : 'Enable'}</button>
+                    <button className="btn btn-secondary btn-small" type="button" onClick={() => resetPassword(user)}>Reset password</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ReportsPanel({ token, role, reports, onRefresh }) {
+  useEffect(() => {
+    if (role === 'admin') onRefresh()
+  }, [token, role])
+
+  if (role !== 'admin') {
+    return <div className="panel"><h2>Reports</h2><p>Only admin can view summary reports.</p></div>
+  }
+
+  return (
+    <div className="content-grid">
+      <StatCard label="Total users" value={reports?.totals?.users ?? 0} />
+      <StatCard label="Payment records" value={reports?.totals?.payments ?? 0} />
+      <StatCard label="Allocated amount" value={`R ${(reports?.totals?.allocated_amount ?? 0).toFixed(2)}`} />
+      <StatCard label="Unmatched" value={reports?.totals?.unmatched_count ?? 0} />
+      <div className="panel full-span">
+        <div className="panel-header"><div><h2>Role breakdown</h2><p>Admin-only reporting panel.</p></div></div>
+        <div className="badge-row">
+          {Object.entries(reports?.role_breakdown || {}).map(([key, value]) => <span key={key} className="pill">{key}: {value}</span>)}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DashboardShell({ auth, onLogout }) {
+  const { user, token } = auth
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [active, setActive] = useState('overview')
+  const [reports, setReports] = useState(null)
+
+  const navItems = useMemo(() => {
+    const items = [{ key: 'overview', label: 'Overview' }, { key: 'payments', label: 'Payments' }]
+    if (user.role === 'admin') items.push({ key: 'users', label: 'User Management' }, { key: 'reports', label: 'Reports' })
+    return items
+  }, [user.role])
+
+  const refreshReports = async () => {
+    try {
+      const data = await apiFetch('/api/reports/summary', {}, token)
+      setReports(data)
+    } catch {
+      setReports(null)
+    }
+  }
+
+  useEffect(() => {
+    refreshReports()
+  }, [token])
+
+  const renderPanel = () => {
+    if (active === 'payments') return <PaymentsPanel token={token} role={user.role} />
+    if (active === 'users') return <UserManagementPanel token={token} role={user.role} />
+    if (active === 'reports') return <ReportsPanel token={token} role={user.role} reports={reports} onRefresh={refreshReports} />
+    return <OverviewPanel user={user} reports={reports} />
+  }
+
+  return (
+    <div className="dashboard-shell dashboard-mobile-shell">
+      <button className="mobile-menu-btn" type="button" onClick={() => setSidebarOpen(true)}>Menu</button>
+      {sidebarOpen ? <div className="mobile-overlay" onClick={() => setSidebarOpen(false)} /> : null}
+      <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-brand">
           <Logo small />
           <div><strong>Martinsdirect</strong><p>Operations Portal</p></div>
         </div>
-
+        <div className="sidebar-user">
+          <div className="sidebar-brand-mark">MD</div>
+          <div><strong>{user.name}</strong><p>{user.email}</p><span className="pill">{user.role}</span></div>
+        </div>
         <nav className="sidebar-nav">
-          {nav.main.map((item) => (
-            <button key={item} className={`nav-btn ${activeMain === item ? 'nav-btn-active' : ''}`} onClick={() => {
-              setActiveMain(item)
-              if (item === 'Franchise') setActiveSub('Employees')
-              if (item === 'Payments') setActiveSub('Receipt Generation')
-            }}>
-              {item}
+          {navItems.map((item) => (
+            <button key={item.key} className={`nav-btn ${active === item.key ? 'nav-btn-active' : ''}`} type="button" onClick={() => { setActive(item.key); setSidebarOpen(false) }}>
+              {item.label}
             </button>
           ))}
         </nav>
-
-        {activeMain === 'Franchise' ? (
-          <div className="sidebar-group">
-            <p>Franchise</p>
-            {nav.franchise.map((item) => (
-              <button key={item} className={`nav-sub-btn ${activeSub === item ? 'nav-sub-btn-active' : ''}`} onClick={() => setActiveSub(item)}>
-                {item}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        {activeMain === 'Payments' ? (
-          <div className="sidebar-group">
-            <p>Payments</p>
-            {nav.payments.map((item) => (
-              <button key={item} className={`nav-sub-btn ${activeSub === item ? 'nav-sub-btn-active' : ''}`} onClick={() => setActiveSub(item)}>
-                {item}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
         <div className="sidebar-footer">
-          <div className="sidebar-user">
-            <div className="sidebar-brand-mark">MD</div>
-            <div>
-              <strong>{loggedInName}</strong>
-              <p>{accountProfile?.email}</p>
-            </div>
-          </div>
-          <button className="btn btn-secondary" onClick={onLogout}>Log out</button>
+          <button className="btn btn-secondary" type="button" onClick={onLogout}>Log out</button>
         </div>
       </aside>
-
       <main className="main-content">
         <div className="topbar">
-          <div>
-            <h1>{activeMain}</h1>
-            <p>{activeSub === 'Employees' ? 'Manage your employee records and role access.' : 'Martinsdirect admin workspace.'}</p>
-          </div>
-
-          <div className="topbar-right">
-            <div className="logged-in-user">
-              <span>Signed in as</span>
-              <strong>{loggedInName}</strong>
-            </div>
-            <Logo small />
-          </div>
+          <div><h1>{navItems.find((item) => item.key === active)?.label || 'Dashboard'}</h1><p>Admin and franchisee rules are active in both UI and backend routes.</p></div>
+          <div className="topbar-right"><Logo small /></div>
         </div>
-
-        {renderContent()}
+        {renderPanel()}
       </main>
     </div>
   )
 }
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState(() => {
-    const stored = localStorage.getItem('martinsdirect_user')
+  const [auth, setAuth] = useState(() => {
+    const stored = localStorage.getItem(STORAGE_KEY)
     return stored ? JSON.parse(stored) : null
   })
-  const [needsSetup, setNeedsSetup] = useState(false)
+  const [resetOpen, setResetOpen] = useState(false)
+  const [resetToken, setResetToken] = useState('')
 
   useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('martinsdirect_user', JSON.stringify(currentUser))
-      setNeedsSetup(demoAccounts[currentUser.role]?.firstLogin || false)
-    } else {
-      localStorage.removeItem('martinsdirect_user')
-      setNeedsSetup(false)
-    }
-  }, [currentUser])
+    if (auth) localStorage.setItem(STORAGE_KEY, JSON.stringify(auth))
+    else localStorage.removeItem(STORAGE_KEY)
+  }, [auth])
 
-  const handleLogin = (user) => {
-    setCurrentUser(user)
+  if (!auth) {
+    return (
+      <>
+        <LoginScreen onLogin={setAuth} onOpenReset={() => setResetOpen(true)} />
+        <ResetPasswordModal open={resetOpen} onClose={() => setResetOpen(false)} token={resetToken} onTokenChange={setResetToken} />
+      </>
+    )
   }
 
-  const handleLogout = () => {
-    setCurrentUser(null)
-  }
-
-  if (!currentUser) return <LoginScreen onLogin={handleLogin} />
-  if (currentUser.role === 'franchisee' && needsSetup) return <FirstTimeSetup onComplete={() => setNeedsSetup(false)} />
-
-  return <DashboardShell role={currentUser.role} currentUser={currentUser} onLogout={handleLogout} />
+  return <DashboardShell auth={auth} onLogout={() => setAuth(null)} />
 }
