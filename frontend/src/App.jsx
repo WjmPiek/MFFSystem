@@ -1,11 +1,11 @@
-﻿import { useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import './assets/styles/globals.css'
 
 const demoAccounts = {
-  superuser: { email: 'superuser@martinsdirect.com', password: 'demo123', firstLogin: false },
-  franchisee: { email: 'franchisee@martinsdirect.com', password: 'demo123', firstLogin: true },
-  manager: { email: 'manager@martinsdirect.com', password: 'demo123', firstLogin: false },
-  agent: { email: 'agent@martinsdirect.com', password: 'demo123', firstLogin: false }
+  superuser: { email: 'wjm@martinsdirect.com', password: 'Renette7', firstLogin: false, displayName: 'Wjm', title: 'System Administrator' },
+  franchisee: { email: 'franchisee@martinsdirect.com', password: 'demo123', firstLogin: true, displayName: 'Franchisee User', title: 'Franchise Owner' },
+  manager: { email: 'manager@martinsdirect.com', password: 'demo123', firstLogin: false, displayName: 'Manager User', title: 'Franchise Manager' },
+  agent: { email: 'agent@martinsdirect.com', password: 'demo123', firstLogin: false, displayName: 'Agent User', title: 'Sales Agent' }
 }
 
 const navForRole = {
@@ -69,67 +69,128 @@ function Logo({ small = false }) {
 }
 
 function LoginScreen({ onLogin }) {
+  const [email, setEmail] = useState('wjm@martinsdirect.com')
+  const [password, setPassword] = useState('Renette7')
+  const [showPassword, setShowPassword] = useState(false)
+  const [rememberMe, setRememberMe] = useState(true)
+  const [error, setError] = useState('')
+
+  const handleSubmit = (event) => {
+    event.preventDefault()
+
+    const normalizedEmail = email.trim().toLowerCase()
+    const adminAccount = demoAccounts.superuser
+
+    if (normalizedEmail === adminAccount.email.toLowerCase() && password === adminAccount.password) {
+      setError('')
+      onLogin('superuser', { rememberMe })
+      return
+    }
+
+    setError('Incorrect email or password. Please use your Martinsdirect admin credentials.')
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f3f3f6] px-4">
-      <div className="w-full max-w-[380px] rounded-2xl border border-[#e7e3ef] bg-white p-8 shadow-lg">
+    <div className="auth-shell">
+      <div className="auth-backdrop" />
 
-        <div className="text-center mb-6">
-          <img
-            src="/logo.png"
-            alt="Martins Franchising"
-            className="mx-auto h-20 object-contain"
-          />
-
-          <h1 className="mt-4 text-1xl font-semibold text-slate-900">
-            Welcome Back
-          </h1>
-
-          <p className="text-sm text-slate-500 mt-1">
-            Sign in to access your dashboard
-          </p>
-        </div>
-
-        <div className="space-y-4">
-
-          <div>
-            <label className="text-sm font-medium text-slate-700">
-              Email (User Login)
-            </label>
-            <input
-              defaultValue="superuser@martinsdirect.com"
-              className="mt-1 w-full rounded-lg border border-[#e7e1f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8f73b5]"
-            />
+      <div className="auth-card">
+        <section className="auth-brand-panel">
+          <div className="auth-brand-top">
+            <Logo />
+            <span className="auth-badge">Secure Admin Access</span>
           </div>
 
           <div>
-            <label className="text-sm font-medium text-slate-700">
-              Password (User Password)
-            </label>
-            <input
-              defaultValue="demo123"
-              type="password"
-              className="mt-1 w-full rounded-lg border border-[#e7e1f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8f73b5]"
-            />
+            <p className="auth-eyebrow">Martinsdirect Management Platform</p>
+            <h1>Professional admin login for your operations dashboard.</h1>
+            <p className="auth-copy">
+              Sign in to manage franchise operations, payments, employee records, and platform settings from one secure workspace.
+            </p>
           </div>
 
-          <button
-            className="w-full rounded-lg bg-[#8f73b5] py-2 text-sm font-semibold text-white hover:bg-[#7e62a6]"
-            onClick={() => onLogin("superuser")}
-          >
-            Login
-          </button>
+          <div className="auth-feature-list">
+            <div className="auth-feature-item">
+              <strong>Role-based access</strong>
+              <span>Administrator access configured for your Martinsdirect account.</span>
+            </div>
+            <div className="auth-feature-item">
+              <strong>Centralized control</strong>
+              <span>Monitor statements, unmatched payments, employees, and receipts.</span>
+            </div>
+            <div className="auth-feature-item">
+              <strong>Trusted sign-in</strong>
+              <span>Designed for a polished first impression on desktop and laptop screens.</span>
+            </div>
+          </div>
+        </section>
 
-          <p className="text-center text-sm">
-            <a
-              href="#"
-              className="text-[#7e62a6] underline underline-offset-4"
-            >
-              Reset password
-            </a>
-          </p>
+        <section className="auth-form-panel">
+          <div className="auth-form-header">
+            <p className="auth-form-kicker">Administrator sign in</p>
+            <h2>Welcome back, Wjm</h2>
+            <p>Use your Martinsdirect admin email and password to continue.</p>
+          </div>
 
-        </div>
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <div className="form-group auth-form-group">
+              <label htmlFor="email">Email address</label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="wjm@martinsdirect.com"
+                autoComplete="username"
+              />
+            </div>
 
+            <div className="form-group auth-form-group">
+              <label htmlFor="password">Password</label>
+              <div className="password-field">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword((value) => !value)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </div>
+
+            <div className="auth-options-row">
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(event) => setRememberMe(event.target.checked)}
+                />
+                <span>Remember this device</span>
+              </label>
+
+              <a href="#" className="reset-link">Forgot password?</a>
+            </div>
+
+            {error ? <div className="auth-error">{error}</div> : null}
+
+            <button type="submit" className="primary-auth-btn">Sign in to dashboard</button>
+          </form>
+
+          <div className="auth-footer-note">
+            <strong>Admin account</strong>
+            <span>{demoAccounts.superuser.email}</span>
+            <small>Role: {demoAccounts.superuser.title}</small>
+          </div>
+        </section>
       </div>
     </div>
   )
@@ -238,21 +299,16 @@ function FirstTimeSetup({ onComplete }) {
               <div className="form-group"><label>Branch</label><input /></div>
             </div>
 
-            <div className="info-box">
-              <strong>What happens after saving</strong>
-              <ul>
-                <li>Franchisee account is created.</li>
-                <li>Franchise record is created.</li>
-                <li>You become the owner of this franchise.</li>
-              </ul>
+            <div className="sub-panel">
+              <h3>Branding</h3>
+              <p>Upload your franchise logo to be used on receipts and reports.</p>
+              <input type="file" />
             </div>
           </div>
         </div>
 
         <div className="panel-actions">
-          <button className="primary-btn" onClick={onComplete}>
-            Save and Continue
-          </button>
+          <button className="btn btn-primary" onClick={onComplete}>Save and Continue</button>
         </div>
       </div>
     </div>
@@ -260,140 +316,91 @@ function FirstTimeSetup({ onComplete }) {
 }
 
 function DashboardShell({ role, onLogout }) {
-  const nav = navForRole[role]
-  const [section, setSection] = useState('Dashboard')
-  const [subsection, setSubsection] = useState('Employees')
-  const [showEmployeeForm, setShowEmployeeForm] = useState(false)
-
-  const [employeeType, setEmployeeType] = useState('manager')
-  const [securityRole, setSecurityRole] = useState('manager')
-  const [employeeStatus, setEmployeeStatus] = useState('active')
-  const [employeeTitle, setEmployeeTitle] = useState('')
+  const [activeMain, setActiveMain] = useState('Dashboard')
+  const [activeSub, setActiveSub] = useState('Employees')
   const [employeeName, setEmployeeName] = useState('')
-  const [employeeIdNumber, setEmployeeIdNumber] = useState('')
   const [employeeEmail, setEmployeeEmail] = useState('')
   const [employeePhone, setEmployeePhone] = useState('')
-  const [employeeUsername, setEmployeeUsername] = useState('')
-  const [employeePassword, setEmployeePassword] = useState('')
-  const [employeeBranch, setEmployeeBranch] = useState('Head Office')
-  const [employeeVendorsId, setEmployeeVendorsId] = useState('')
-  const [employeePinCode, setEmployeePinCode] = useState('')
-  const [employeeNotes, setEmployeeNotes] = useState('')
-  const [dateEmployed, setDateEmployed] = useState('')
-  const [dateQuickEntry, setDateQuickEntry] = useState('')
+  const [employeeRole, setEmployeeRole] = useState('agent')
   const [searchTerm, setSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
-  const [statusFilter, setStatusFilter] = useState('all')
-
   const [employees, setEmployees] = useState([
-    { id: 1, role: 'Franchisee', name: 'Nandi Mokoena', status: 'Active', email: 'nandi@martinsdirect.com', branch: 'Head Office' },
-    { id: 2, role: 'Manager', name: 'Sipho Nkosi', status: 'Active', email: 'sipho@martinsdirect.com', branch: 'Branch A' },
-    { id: 3, role: 'Agent', name: 'Lebo Dlamini', status: 'Not Active', email: 'lebo@martinsdirect.com', branch: 'Branch A' }
+    { id: 1, fullName: 'Sarah Ndlovu', email: 'sarah@martinsdirect.com', role: 'franchisee', phone: '082 555 0142', branch: 'Pretoria East' },
+    { id: 2, fullName: 'Michael Jacobs', email: 'michael@martinsdirect.com', role: 'manager', phone: '082 555 0164', branch: 'Pretoria East' },
+    { id: 3, fullName: 'Thandi Mokoena', email: 'thandi@martinsdirect.com', role: 'agent', phone: '082 555 0181', branch: 'Pretoria North' }
   ])
 
-  const formatEightDigitDate = (raw) => {
-    const digits = raw.replace(/\D/g, '').slice(0, 8)
-    if (digits.length !== 8) return null
-    const day = digits.slice(0, 2)
-    const month = digits.slice(2, 4)
-    const year = digits.slice(4, 8)
-    const dayNum = Number(day)
-    const monthNum = Number(month)
-    const yearNum = Number(year)
-    if (dayNum < 1 || dayNum > 31 || monthNum < 1 || monthNum > 12 || yearNum < 1900) return null
-    return `${year}-${month}-${day}`
-  }
+  const nav = navForRole[role]
+  const roleLabel = role === 'superuser' ? 'Admin' : toTitleCase(role)
+  const accountProfile = demoAccounts[role]
+  const loggedInName = accountProfile?.displayName || roleLabel
 
-  const handleQuickDateChange = (value) => {
-    const digits = value.replace(/\D/g, '').slice(0, 8)
-    setDateQuickEntry(digits)
-    const parsed = formatEightDigitDate(digits)
-    if (parsed) setDateEmployed(parsed)
-  }
+  const filteredEmployees = employees.filter((employee) => {
+    const matchesSearch = [employee.fullName, employee.email, employee.branch]
+      .join(' ')
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase())
 
-  const resetEmployeeForm = () => {
-    setEmployeeType('manager')
-    setSecurityRole('manager')
-    setEmployeeStatus('active')
-    setEmployeeTitle('')
-    setEmployeeName('')
-    setEmployeeIdNumber('')
-    setEmployeeEmail('')
-    setEmployeePhone('')
-    setEmployeeUsername('')
-    setEmployeePassword('')
-    setEmployeeBranch('Head Office')
-    setEmployeeVendorsId('')
-    setEmployeePinCode('')
-    setEmployeeNotes('')
-    setDateEmployed('')
-    setDateQuickEntry('')
-  }
+    const matchesRole = roleFilter === 'all' || employee.role === roleFilter
+    return matchesSearch && matchesRole
+  })
 
   const handleAddEmployee = () => {
-    const nextRole = securityRole === 'manager' ? 'Manager' : 'Agent'
-    const nextStatus = employeeStatus === 'inactive' ? 'Not Active' : 'Active'
-    const nextBranch = nextRole === 'Manager' ? employeeBranch : '-'
+    if (!employeeName.trim() || !employeeEmail.trim()) return
 
-    setEmployees((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        role: nextRole,
-        name: toTitleCase(employeeName.trim() || 'new member'),
-        status: nextStatus,
-        email: employeeEmail.trim() || `${securityRole}@martinsdirect.com`,
-        branch: nextBranch,
-        loginUsername: employeeUsername,
-        password: employeeStatus === 'inactive' ? 'deactivated-reset-required' : employeePassword,
-        dateEmployed
-      }
-    ])
+    const newEmployee = {
+      id: Date.now(),
+      fullName: employeeName.trim(),
+      email: employeeEmail.trim(),
+      role: employeeRole,
+      phone: employeePhone.trim() || 'Not provided',
+      branch: role === 'superuser' ? 'System-wide' : 'Assigned franchise'
+    }
 
-    resetEmployeeForm()
-    setShowEmployeeForm(false)
+    setEmployees((current) => [newEmployee, ...current])
+    setEmployeeName('')
+    setEmployeeEmail('')
+    setEmployeePhone('')
+    setEmployeeRole(role === 'agent' ? 'agent' : 'manager')
   }
 
   const handleDeleteEmployee = (id) => {
-    if (!['superuser', 'franchisee'].includes(role)) return
-    setEmployees((prev) => prev.filter((employee) => employee.id !== id))
+    setEmployees((current) => current.filter((employee) => employee.id !== id))
   }
 
-  const filteredEmployees = employees.filter((user) => {
-    const matchesSearch =
-      !searchTerm ||
-      [user.name, user.email, user.role, user.branch].join(' ').toLowerCase().includes(searchTerm.toLowerCase())
-
-    const matchesRole = roleFilter === 'all' || user.role.toLowerCase() === roleFilter
-    const matchesStatus = statusFilter === 'all' || user.status.toLowerCase().replace(/\s+/g, '-') === statusFilter
-
-    return matchesSearch && matchesRole && matchesStatus
-  })
-
   const renderContent = () => {
-    if (section === 'Dashboard') {
+    if (activeMain === 'Dashboard') {
       return (
-        <>
-          <div className="stats-grid">
-            <div className="stat-card"><span>Total Employees</span><strong>{employees.length}</strong></div>
-            <div className="stat-card"><span>Reports Access</span><strong>{['superuser', 'franchisee'].includes(role) ? 'Yes' : 'No'}</strong></div>
-            <div className="stat-card"><span>Admin Settings</span><strong>{role === 'superuser' ? 'Yes' : 'No'}</strong></div>
-            <div className="stat-card"><span>System Role</span><strong className="capitalize">{role}</strong></div>
+        <div className="content-grid">
+          <div className="stat-card">
+            <span>Total Employees</span>
+            <strong>{employees.length}</strong>
           </div>
-          <div className="panel">
+          <div className="stat-card">
+            <span>System Role</span>
+            <strong>{roleLabel}</strong>
+          </div>
+          <div className="stat-card">
+            <span>Admin Access</span>
+            <strong>{role === 'superuser' ? 'Enabled' : 'Limited'}</strong>
+          </div>
+          <div className="panel full-span">
             <div className="panel-header">
               <div>
-                <h2>Dashboard Overview</h2>
-                <p>Professional dashboard foundation for Martinsdirect.</p>
+                <h2>Welcome to Martinsdirect</h2>
+                <p>Use the navigation to manage employees, payments, reports, and platform settings.</p>
               </div>
             </div>
-            <p>This starter includes the login screen, sidebar navigation, Franchise tabs, Employees module, Reports module, Payments section, and Admin Settings visibility.</p>
+            <div className="badge-row">
+              <span className="pill">Role: {roleLabel}</span>
+              <span className="pill pill-soft">{employeesAccess[role]}</span>
+            </div>
           </div>
-        </>
+        </div>
       )
     }
 
-    if (section === 'Franchise' && subsection === 'Employees') {
+    if (activeMain === 'Franchise' && activeSub === 'Employees') {
       return (
         <div className="panel">
           <div className="panel-header">
@@ -403,274 +410,100 @@ function DashboardShell({ role, onLogout }) {
             </div>
           </div>
 
-          <div className="toolbar">
-            <input
-              placeholder="Search by name, email, or username"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-
-            <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
-              <option value="all">All roles</option>
-              <option value="franchisee">Franchisee</option>
-              <option value="manager">Manager</option>
-              <option value="agent">Agent</option>
-            </select>
-
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="all">All statuses</option>
-              <option value="active">Active</option>
-              <option value="not-active">Not Active</option>
-            </select>
-
-            <button className="primary-btn" onClick={() => setShowEmployeeForm(true)}>
-              New Member
-            </button>
-          </div>
-
-          {showEmployeeForm && (
-            <div className="sub-panel employee-form-wrap">
-              <div className="panel-header">
-                <div>
-                  <h3>New Member Form</h3>
-                  <p>Select employee type, complete the details, then add the member.</p>
-                </div>
-                <button
-                  className="secondary-btn"
-                  onClick={() => {
-                    resetEmployeeForm()
-                    setShowEmployeeForm(false)
-                  }}
-                >
-                  Close
-                </button>
+          <div className="employees-grid">
+            <div className="sub-panel">
+              <h3>Add Employee</h3>
+              <div className="form-group">
+                <label>Full Name</label>
+                <input value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} placeholder="Enter full name" />
               </div>
-
-              <div className="info-box">
-                {employeeStatus === 'inactive'
-                  ? 'Not Active selected: on backend save, this employee must be deactivated across all roles and their password must be replaced or reset immediately.'
-                  : 'Active selected: employee can log in using the saved credentials and assigned role access.'}
+              <div className="form-group">
+                <label>Email</label>
+                <input value={employeeEmail} onChange={(e) => setEmployeeEmail(e.target.value)} placeholder="Enter email address" />
               </div>
-
-              <div className="form-grid">
+              <div className="grid-two">
                 <div className="form-group">
-                  <label>Employee Type</label>
-                  <select
-                    value={employeeType}
-                    onChange={(e) => {
-                      setEmployeeType(e.target.value)
-                      setSecurityRole(e.target.value)
-                    }}
-                  >
-                    <option value="manager">Manager</option>
-                    <option value="agent">Agent</option>
+                  <label>Phone Number</label>
+                  <input value={employeePhone} onChange={(e) => setEmployeePhone(e.target.value)} placeholder="Enter phone number" />
+                </div>
+                <div className="form-group">
+                  <label>Role</label>
+                  <select value={employeeRole} onChange={(e) => setEmployeeRole(e.target.value)}>
+                    {['franchisee', 'manager', 'agent'].map((option) => (
+                      <option key={option} value={option}>{toTitleCase(option)}</option>
+                    ))}
                   </select>
                 </div>
-
-                <div className="form-group">
-                  <label>Security Role</label>
-                  {(role === 'superuser' || role === 'franchisee') ? (
-                    <select value={securityRole} onChange={(e) => setSecurityRole(e.target.value)}>
-                      {employeeType === 'manager' ? (
-                        <option value="manager">Manager</option>
-                      ) : (
-                        <option value="agent">Agent</option>
-                      )}
-                    </select>
-                  ) : (
-                    <input value={employeeType === 'manager' ? 'Manager' : 'Agent'} readOnly />
-                  )}
-                </div>
-
-                <div className="form-group">
-                  <label>Title</label>
-                  <input value={employeeTitle} onChange={(e) => setEmployeeTitle(e.target.value)} placeholder="Mr / Ms / Dr" />
-                </div>
-
-                <div className="form-group">
-                  <label>Name and Surname</label>
-                  <input value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} />
-                </div>
-
-                <div className="form-group">
-                  <label>ID Number</label>
-                  <input value={employeeIdNumber} onChange={(e) => setEmployeeIdNumber(e.target.value)} />
-                </div>
-
-                <div className="form-group">
-                  <label>Email</label>
-                  <input value={employeeEmail} onChange={(e) => setEmployeeEmail(e.target.value)} />
-                </div>
-
-                <div className="form-group">
-                  <label>Phone</label>
-                  <input value={employeePhone} onChange={(e) => setEmployeePhone(e.target.value)} />
-                </div>
-
-                <div className="form-group">
-                  <label>Login Username</label>
-                  <input value={employeeUsername} onChange={(e) => setEmployeeUsername(e.target.value)} />
-                </div>
-
-                <div className="form-group">
-                  <label>Login Password</label>
-                  <input type="password" value={employeePassword} onChange={(e) => setEmployeePassword(e.target.value)} />
-                </div>
-
-                <div className="form-group">
-                  <label>Date Employed</label>
-                  <div className="inline-grid">
-                    <input type="date" value={dateEmployed} onChange={(e) => setDateEmployed(e.target.value)} />
-                    <input
-                      placeholder="Quick entry: 15051982"
-                      value={dateQuickEntry}
-                      onChange={(e) => handleQuickDateChange(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {employeeType === 'manager' && (
-                  <div className="form-group">
-                    <label>Branch</label>
-                    <select value={employeeBranch} onChange={(e) => setEmployeeBranch(e.target.value)}>
-                      <option value="Head Office">Head Office</option>
-                      <option value="Branch A">Branch A</option>
-                      <option value="Branch B">Branch B</option>
-                    </select>
-                  </div>
-                )}
-
-                <div className="form-group">
-                  <label>Vendors ID</label>
-                  <input value={employeeVendorsId} onChange={(e) => setEmployeeVendorsId(e.target.value)} />
-                </div>
-
-                <div className="form-group">
-                  <label>Pin Code</label>
-                  <input value={employeePinCode} onChange={(e) => setEmployeePinCode(e.target.value)} />
-                </div>
-
-                <div className="form-group">
-                  <label>Status</label>
-                  <select value={employeeStatus} onChange={(e) => setEmployeeStatus(e.target.value)}>
-                    <option value="active">Active</option>
-                    <option value="inactive">Not Active</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>Notes</label>
-                  <input value={employeeNotes} onChange={(e) => setEmployeeNotes(e.target.value)} />
-                </div>
               </div>
-
-              <div className="panel-actions">
-                <button className="primary-btn" onClick={handleAddEmployee}>
-                  Add Member
-                </button>
-              </div>
+              <button className="btn btn-primary" onClick={handleAddEmployee}>Add Employee</button>
             </div>
-          )}
 
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th>Role</th>
-                  <th>Email</th>
-                  <th>Branch</th>
-                  <th>Status</th>
-                  {['superuser', 'franchisee'].includes(role) && <th>Actions</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredEmployees.map((user) => (
-                  <tr key={user.id}>
-                    <td>{user.name}</td>
-                    <td>{user.role}</td>
-                    <td>{user.email}</td>
-                    <td>{user.branch}</td>
-                    <td>
-                      <span className={user.status === 'Active' ? 'status-active' : 'status-inactive'}>
-                        {user.status}
-                      </span>
-                    </td>
-                    {['superuser', 'franchisee'].includes(role) && (
-                      <td>
-                        <button className="delete-btn" onClick={() => handleDeleteEmployee(user.id)}>
-                          Delete
-                        </button>
-                      </td>
-                    )}
-                  </tr>
+            <div className="sub-panel">
+              <div className="toolbar">
+                <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search employees" />
+                <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+                  <option value="all">All roles</option>
+                  <option value="franchisee">Franchisee</option>
+                  <option value="manager">Manager</option>
+                  <option value="agent">Agent</option>
+                </select>
+              </div>
+
+              <div className="employee-list">
+                {filteredEmployees.map((employee) => (
+                  <div key={employee.id} className="employee-item">
+                    <div>
+                      <strong>{employee.fullName}</strong>
+                      <p>{employee.email}</p>
+                      <span>{toTitleCase(employee.role)} · {employee.branch}</span>
+                    </div>
+                    <button className="btn btn-danger" onClick={() => handleDeleteEmployee(employee.id)}>Delete</button>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )
-    }
-
-    if (section === 'Franchise' && subsection === 'Reports Dashboard') {
-      return (
-        <div className="panel">
-          <div className="panel-header">
-            <div>
-              <h2>Reports Dashboard</h2>
-              <p>Visible to Superuser and Franchisee only.</p>
+              </div>
             </div>
           </div>
-          <div className="stats-grid">
-            <div className="stat-card"><span>Total Uploaded Statements</span><strong>12</strong></div>
-            <div className="stat-card"><span>Auto Matched</span><strong>187</strong></div>
-            <div className="stat-card"><span>Unmatched</span><strong>9</strong></div>
-            <div className="stat-card"><span>Receipts Generated</span><strong>84</strong></div>
-          </div>
         </div>
       )
     }
 
-    if (section === 'Payments' && subsection === 'Receipt Generation') {
+    if (activeMain === 'Payments') {
       return (
         <div className="panel">
           <div className="panel-header">
             <div>
               <h2>Receipt Generation</h2>
-              <p>Create and manage payment receipts.</p>
+              <p>Create payment receipts for employee records.</p>
             </div>
           </div>
-          <div className="form-grid">
-            <div className="form-group"><label>Receipt Number</label><input placeholder="RCP-0001" /></div>
-            <div className="form-group"><label>Customer / Franchise</label><input placeholder="Enter name" /></div>
-            <div className="form-group"><label>Amount</label><input placeholder="0.00" /></div>
+
+          <div className="grid-two">
+            <div className="form-group"><label>Employee Name</label><input placeholder="Employee name" /></div>
+            <div className="form-group"><label>Amount</label><input placeholder="Amount paid" /></div>
+            <div className="form-group"><label>Receipt Number</label><input placeholder="Receipt reference" /></div>
             <div className="form-group"><label>Date</label><input type="date" /></div>
           </div>
-          <div className="panel-actions">
-            <button className="primary-btn">Generate Receipt</button>
-          </div>
+          <button className="btn btn-primary">Generate Receipt</button>
         </div>
       )
     }
 
-    if (section === 'Admin Settings') {
+    if (activeMain === 'Admin Settings') {
       return (
         <div className="panel">
           <div className="panel-header">
             <div>
               <h2>Admin Settings</h2>
-              <p>Superuser-only configuration area.</p>
+              <p>Manage branding, support email, and general platform preferences.</p>
             </div>
           </div>
-          <div className="form-grid">
-            <div className="form-group"><label>System Name</label><input defaultValue="Martinsdirect System" /></div>
+          <div className="grid-two">
+            <div className="form-group"><label>System Name</label><input defaultValue="Martinsdirect Platform" /></div>
             <div className="form-group"><label>Support Email</label><input defaultValue="support@martinsdirect.com" /></div>
-            <div className="form-group"><label>Theme</label><input defaultValue="Light Grey + Lilac" readOnly /></div>
-            <div className="form-group"><label>Logo Path</label><input defaultValue="/logo.png" readOnly /></div>
+            <div className="form-group"><label>Theme</label><select defaultValue="light"><option value="light">Light</option><option value="dark">Dark</option></select></div>
+            <div className="form-group"><label>Logo</label><input type="file" /></div>
           </div>
-          <div className="panel-actions">
-            <button className="primary-btn">Save Settings</button>
-          </div>
+          <button className="btn btn-primary">Save Settings</button>
         </div>
       )
     }
@@ -679,102 +512,76 @@ function DashboardShell({ role, onLogout }) {
       <div className="panel">
         <div className="panel-header">
           <div>
-            <h2>{subsection}</h2>
-            <p>Module placeholder ready for the next step.</p>
+            <h2>{activeSub}</h2>
+            <p>This section is available in the navigation and ready for detailed module development.</p>
           </div>
         </div>
-        <p>This section is now part of the real dashboard layout and is ready for backend connection.</p>
       </div>
     )
   }
-
-  const loggedInName = demoAccounts[role]?.email || role
 
   return (
     <div className="dashboard-shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <div className="sidebar-brand-mark">MD</div>
+          <Logo small />
           <div>
-            <div className="sidebar-brand-title">Martinsdirect</div>
-            <div className="sidebar-brand-subtitle">{role} portal</div>
+            <strong>Martinsdirect</strong>
+            <p>Operations Portal</p>
           </div>
         </div>
 
-        <div className="sidebar-section">
-          <button className={section === 'Dashboard' ? 'nav-btn active' : 'nav-btn'} onClick={() => setSection('Dashboard')}>
-            Dashboard
-          </button>
-        </div>
-
-        <div className="sidebar-section">
-          <button className={section === 'Franchise' ? 'nav-btn active' : 'nav-btn'} onClick={() => setSection('Franchise')}>
-            Franchise
-          </button>
-          <div className="subnav">
-            {nav.franchise.map((item) => (
-              <button
-                key={item}
-                className={section === 'Franchise' && subsection === item ? 'subnav-btn active' : 'subnav-btn'}
-                onClick={() => {
-                  setSection('Franchise')
-                  setSubsection(item)
-                }}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="sidebar-section">
-          <button className={section === 'Payments' ? 'nav-btn active' : 'nav-btn'} onClick={() => setSection('Payments')}>
-            Payments
-          </button>
-          <div className="subnav">
-            {nav.payments.map((item) => (
-              <button
-                key={item}
-                className={section === 'Payments' && subsection === item ? 'subnav-btn active' : 'subnav-btn'}
-                onClick={() => {
-                  setSection('Payments')
-                  setSubsection(item)
-                }}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {nav.main.includes('Admin Settings') && (
-          <div className="sidebar-section">
-            <button
-              className={section === 'Admin Settings' ? 'nav-btn active' : 'nav-btn'}
-              onClick={() => setSection('Admin Settings')}
-            >
-              Admin Settings
+        <nav className="sidebar-nav">
+          {nav.main.map((item) => (
+            <button key={item} className={`nav-btn ${activeMain === item ? 'nav-btn-active' : ''}`} onClick={() => {
+              setActiveMain(item)
+              if (item === 'Franchise') setActiveSub('Employees')
+              if (item === 'Payments') setActiveSub('Receipt Generation')
+            }}>
+              {item}
             </button>
-          </div>
-        )}
+          ))}
+        </nav>
 
-        <div className="sidebar-user">
-          <div className="sidebar-user-badge">{role.slice(0, 2).toUpperCase()}</div>
-          <div className="sidebar-user-info">
-            <strong>{role}</strong>
-            <span>Signed in</span>
+        {activeMain === 'Franchise' ? (
+          <div className="sidebar-group">
+            <p>Franchise</p>
+            {nav.franchise.map((item) => (
+              <button key={item} className={`nav-sub-btn ${activeSub === item ? 'nav-sub-btn-active' : ''}`} onClick={() => setActiveSub(item)}>
+                {item}
+              </button>
+            ))}
           </div>
-          <button className="secondary-btn logout-btn" onClick={onLogout}>
-            Logout
-          </button>
+        ) : null}
+
+        {activeMain === 'Payments' ? (
+          <div className="sidebar-group">
+            <p>Payments</p>
+            {nav.payments.map((item) => (
+              <button key={item} className={`nav-sub-btn ${activeSub === item ? 'nav-sub-btn-active' : ''}`} onClick={() => setActiveSub(item)}>
+                {item}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="sidebar-footer">
+          <div className="sidebar-user">
+            <div className="sidebar-brand-mark">MD</div>
+            <div>
+              <strong>{loggedInName}</strong>
+              <p>{accountProfile?.email}</p>
+            </div>
+          </div>
+          <button className="btn btn-secondary" onClick={onLogout}>Log out</button>
         </div>
       </aside>
 
       <main className="main-content">
-        <div className="topbar panel">
+        <div className="topbar">
           <div>
-            <h1>{section === 'Franchise' || section === 'Payments' ? subsection : section}</h1>
-            <p>Professional dashboard starter matching your system structure.</p>
+            <h1>{activeMain}</h1>
+            <p>{activeSub === 'Employees' ? 'Manage your employee records and role access.' : 'Martinsdirect admin workspace.'}</p>
           </div>
 
           <div className="topbar-right">
