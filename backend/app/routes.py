@@ -3,10 +3,12 @@ import secrets
 from datetime import datetime, timedelta
 
 from flask import Blueprint, current_app, g, jsonify, request
+from werkzeug.utils import secure_filename
 
 from .extensions import db
 from .models import PaymentTransaction, User
 from .permissions import auth_required, create_auth_token, normalize_role, roles_required
+from .services.statement_parser import StatementParseError, StatementParser
 
 api = Blueprint('api', __name__)
 RESET_TOKENS = {}
@@ -206,16 +208,37 @@ def list_payments():
 @api.post('/payments/upload-statement')
 @roles_required('admin', 'franchisee')
 def upload_statement():
-    data = _json()
-    filename = (data.get('filename') or 'uploaded-statement.pdf').strip()
-    rows = data.get('transactions') or []
-
+    parser = StatementParser()
     created = []
+
+    if request.files:
+        statement_file = request.files.get('statement') or next(iter(request.files.values()), None)
+        if not statement_file or not statement_file.filename:
+            return jsonify({'error': 'A bank statement PDF file is required.'}), 400
+        if not statement_file.filename.lower().endswith('.pdf'):
+            return jsonify({'error': 'Only PDF bank statements are supported.'}), 400
+
+        filename = secure_filename(statement_file.filename) or 'bank-statement.pdf'
+        franchise_name = (request.form.get('franchise_name') or '').strip() or None
+
+        try:
+            rows = parser.parse_pdf(statement_file.read(), franchise_name=franchise_name)
+        except StatementParseError as exc:
+            return jsonify({'error': str(exc)}), 400
+
+    else:
+        data = _json()
+        filename = (data.get('filename') or 'uploaded-statement.pdf').strip()
+        rows = data.get('transactions') or []
+
     for row in rows:
         payer_name = (row.get('payer_name') or '').strip()
         reference = (row.get('reference') or '').strip()
-        amount = float(row.get('amount') or 0)
-        if not payer_name or not reference:
+        try:
+            amount = float(row.get('amount') or 0)
+        except (TypeError, ValueError):
+            amount = 0
+        if not payer_name or not reference or amount <= 0:
             continue
         transaction = PaymentTransaction(
             payer_name=payer_name,
@@ -228,6 +251,9 @@ def upload_statement():
         )
         db.session.add(transaction)
         created.append(transaction)
+
+    if not created:
+        return jsonify({'error': 'No valid payment transactions were found to import.'}), 400
 
     db.session.commit()
     return jsonify({

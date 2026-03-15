@@ -1115,3 +1115,9 @@ th {
     margin-top: 44px;
   }
 }
+
+.helper-text {
+  margin: 8px 0 0;
+  font-size: 0.92rem;
+  color: var(--muted);
+}

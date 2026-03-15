@@ -9,8 +9,9 @@ function apiUrl(path) {
 }
 
 async function apiFetch(path, options = {}, token) {
+  const isFormData = options.body instanceof FormData
   const headers = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers || {}),
   }
 
@@ -215,6 +216,9 @@ function PaymentsPanel({ token, role }) {
   const [payments, setPayments] = useState([])
   const [error, setError] = useState('')
   const [uploadRows, setUploadRows] = useState('[{"payer_name":"Delta Retail","reference":"DELTA-1004","amount":1499.99,"franchise_name":"Pretoria West"}]')
+  const [statementFile, setStatementFile] = useState(null)
+  const [franchiseName, setFranchiseName] = useState('')
+  const [uploadMode, setUploadMode] = useState('pdf')
   const canEdit = role === 'admin' || role === 'franchisee'
 
   const loadPayments = async () => {
@@ -233,11 +237,24 @@ function PaymentsPanel({ token, role }) {
 
   const uploadStatement = async () => {
     try {
-      const rows = JSON.parse(uploadRows)
-      await apiFetch('/api/payments/upload-statement', {
-        method: 'POST',
-        body: JSON.stringify({ filename: 'manual-import.json', transactions: rows }),
-      }, token)
+      setError('')
+      if (uploadMode === 'pdf') {
+        if (!statementFile) throw new Error('Choose a bank statement PDF first.')
+        const formData = new FormData()
+        formData.append('statement', statementFile)
+        if (franchiseName.trim()) formData.append('franchise_name', franchiseName.trim())
+        await apiFetch('/api/payments/upload-statement', {
+          method: 'POST',
+          body: formData,
+        }, token)
+        setStatementFile(null)
+      } else {
+        const rows = JSON.parse(uploadRows)
+        await apiFetch('/api/payments/upload-statement', {
+          method: 'POST',
+          body: JSON.stringify({ filename: 'manual-import.json', transactions: rows }),
+        }, token)
+      }
       loadPayments()
     } catch (err) {
       setError(err.message)
@@ -271,8 +288,26 @@ function PaymentsPanel({ token, role }) {
   return (
     <div className="stack-lg">
       <div className="panel">
-        <div className="panel-header"><div><h2>Upload bank statement</h2><p>Paste JSON rows to simulate imported bank PDF transactions for this deployment build.</p></div></div>
-        <div className="form-group"><label>Transactions JSON</label><textarea className="text-area" value={uploadRows} onChange={(e) => setUploadRows(e.target.value)} /></div>
+        <div className="panel-header"><div><h2>Upload bank statement</h2><p>Upload a text-based bank statement PDF for extraction, or switch to manual JSON import.</p></div></div>
+        <div className="badge-row">
+          <button className={`btn ${uploadMode === 'pdf' ? 'btn-primary' : 'btn-secondary'}`} type="button" onClick={() => setUploadMode('pdf')}>PDF upload</button>
+          <button className={`btn ${uploadMode === 'json' ? 'btn-primary' : 'btn-secondary'}`} type="button" onClick={() => setUploadMode('json')}>Manual JSON</button>
+        </div>
+        {uploadMode === 'pdf' ? (
+          <>
+            <div className="form-group">
+              <label>Statement PDF</label>
+              <input type="file" accept="application/pdf,.pdf" onChange={(e) => setStatementFile(e.target.files?.[0] || null)} />
+            </div>
+            <div className="form-group">
+              <label>Franchise name (optional)</label>
+              <input value={franchiseName} onChange={(e) => setFranchiseName(e.target.value)} placeholder="Pretoria West" />
+            </div>
+            <p className="helper-text">Best results come from text-based bank statement PDFs with date, description, and amount columns.</p>
+          </>
+        ) : (
+          <div className="form-group"><label>Transactions JSON</label><textarea className="text-area" value={uploadRows} onChange={(e) => setUploadRows(e.target.value)} /></div>
+        )}
         <button className="btn btn-primary" type="button" onClick={uploadStatement}>Import transactions</button>
       </div>
       <div className="panel">
