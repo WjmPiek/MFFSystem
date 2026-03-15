@@ -1,3 +1,3 @@
-﻿from flask_sqlalchemy import SQLAlchemy
-
-db = SQLAlchemy()
+﻿from .user import User
+from .employee import Employee
+from .franchise import Franchise

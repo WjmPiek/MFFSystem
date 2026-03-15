@@ -1,6 +1,7 @@
 import os
 from flask import Flask
 from flask_cors import CORS
+from .routes import api
 from .extensions import db, migrate
 
 def create_app():
@@ -23,5 +24,7 @@ def create_app():
     migrate.init_app(app, db)
     
     from . import models
+
+    app.register_blueprint(api, url_prefix="/api")
 
     return app
