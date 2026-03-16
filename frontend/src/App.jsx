@@ -5,6 +5,44 @@ const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 const STORAGE_KEY = 'martinsdirect_auth'
 const MEMBERS_KEY = 'martinsdirect_members_data'
 
+const MEMBER_TABS = [
+  { key: 'insMembers', label: 'Ins Members' },
+  { key: 'membershipClub', label: 'Membership Club' },
+  { key: 'society', label: 'Society' },
+]
+
+const SERVICE_TABS = [
+  { key: 'funerals', label: 'Funerals' },
+  { key: 'cremations', label: 'Cremations' },
+  { key: 'repatriations', label: 'Repatriations' },
+]
+
+const PAYMENT_TABS = [
+  { key: 'insReceipt', label: 'Ins Receipt' },
+  { key: 'clubReceipt', label: 'Club Receipt' },
+  { key: 'societyReceipt', label: 'Society Receipt' },
+  { key: 'cashSale', label: 'Cash Sale' },
+  { key: 'funeralReceipt', label: 'Funeral Receipt' },
+]
+
+const SERVICE_CONTENT = {
+  funerals: {
+    title: 'Funerals',
+    description: 'Track funeral service requests, linked paperwork, and case progress.',
+    documents: ['Death notice', 'Service order', 'Burial permit', 'Policy confirmation'],
+  },
+  cremations: {
+    title: 'Cremations',
+    description: 'Manage cremation case intake and monitor required compliance documents.',
+    documents: ['Cremation consent', 'Medical certificate', 'Collection order', 'Invoice'],
+  },
+  repatriations: {
+    title: 'Repatriations',
+    description: 'Follow transport cases and monitor each supporting document before release.',
+    documents: ['Passport / ID copy', 'Transit permit', 'Transport booking', 'Receiving undertaker note'],
+  },
+}
+
 function apiUrl(path) {
   return API_BASE_URL ? `${API_BASE_URL}${path}` : path
 }
@@ -28,14 +66,10 @@ async function apiFetch(path, options = {}, token) {
   return data
 }
 
-function Logo({ small = false }) {
+function Logo({ small = false, className = '' }) {
   return (
-    <div className={small ? 'brand-lockup brand-lockup-small' : 'brand-lockup'} aria-label="Martinsdirect">
-      <div className="brand-mark">MD</div>
-      <div className="brand-copy">
-        <strong>Martinsdirect</strong>
-        <span>Operations Portal</span>
-      </div>
+    <div className={`brand-lockup ${small ? 'brand-lockup-small' : ''} ${className}`.trim()} aria-label="Martinsdirect">
+      <img className="brand-image" src="/logo.png" alt="Martinsdirect logo" />
     </div>
   )
 }
@@ -217,7 +251,7 @@ function OverviewPanel({ user, reports }) {
   )
 }
 
-function PaymentsPanel({ token, role }) {
+function PaymentsPanel({ token, role, activeSubtab, setActiveSubtab }) {
   const [payments, setPayments] = useState([])
   const [error, setError] = useState('')
   const [uploadRows, setUploadRows] = useState('[{"payer_name":"Delta Retail","reference":"DELTA-1004","amount":1499.99,"franchise_name":"Pretoria West"}]')
@@ -226,11 +260,12 @@ function PaymentsPanel({ token, role }) {
   const [bankName, setBankName] = useState('')
   const [uploadMode, setUploadMode] = useState('file')
   const canEdit = role === 'admin' || role === 'franchisee'
+  const activeLabel = PAYMENT_TABS.find((item) => item.key === activeSubtab)?.label || 'Payments'
 
   const loadPayments = async () => {
     try {
       const paymentData = await apiFetch('/api/payments', {}, token)
-      setPayments(paymentData)
+      setPayments(Array.isArray(paymentData) ? paymentData : [])
       setError('')
     } catch (err) {
       setError(err.message)
@@ -250,13 +285,14 @@ function PaymentsPanel({ token, role }) {
         formData.append('statement', statementFile)
         if (franchiseName.trim()) formData.append('franchise_name', franchiseName.trim())
         if (bankName.trim()) formData.append('bank_name', bankName.trim())
+        formData.append('receipt_type', activeSubtab)
         await apiFetch('/api/payments/upload-statement', { method: 'POST', body: formData }, token)
         setStatementFile(null)
       } else {
         const rows = JSON.parse(uploadRows)
         await apiFetch('/api/payments/upload-statement', {
           method: 'POST',
-          body: JSON.stringify({ filename: 'manual-import.json', transactions: rows }),
+          body: JSON.stringify({ filename: `${activeSubtab}.json`, receipt_type: activeSubtab, transactions: rows }),
         }, token)
       }
       loadPayments()
@@ -266,7 +302,7 @@ function PaymentsPanel({ token, role }) {
   }
 
   const allocate = async (payment) => {
-    const allocatedTo = window.prompt('Allocate to', payment.allocated_to || 'Franchise Fee')
+    const allocatedTo = window.prompt('Allocate to', payment.allocated_to || activeLabel)
     if (!allocatedTo) return
     await apiFetch(`/api/payments/${payment.id}/allocate`, {
       method: 'PUT',
@@ -280,7 +316,7 @@ function PaymentsPanel({ token, role }) {
     if (!reference) return
     await apiFetch(`/api/payments/${payment.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ reference, status: 'edited' }),
+      body: JSON.stringify({ reference, status: 'edited', receipt_type: activeSubtab }),
     }, token)
     loadPayments()
   }
@@ -289,6 +325,22 @@ function PaymentsPanel({ token, role }) {
 
   return (
     <div className="stack-lg">
+      <div className="panel">
+        <div className="panel-header"><div><h2>{activeLabel}</h2><p>Import and manage transactions for the selected receipt type.</p></div></div>
+        <div className="subtab-row">
+          {PAYMENT_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              className={`subtab-btn ${activeSubtab === tab.key ? 'subtab-btn-active' : ''}`}
+              onClick={() => setActiveSubtab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="panel">
         <div className="panel-header"><div><h2>Upload bank statement</h2><p>Upload a text-based bank statement PDF or switch to manual JSON import.</p></div></div>
         <div className="badge-row">
@@ -308,7 +360,7 @@ function PaymentsPanel({ token, role }) {
               </div>
             </div>
             <div className="form-group">
-              <label>Franchise name (optional)</label>
+              <label>Branch / franchise (optional)</label>
               <input value={franchiseName} onChange={(e) => setFranchiseName(e.target.value)} placeholder="Pretoria West" />
             </div>
           </>
@@ -320,7 +372,7 @@ function PaymentsPanel({ token, role }) {
       </div>
 
       <div className="panel">
-        <div className="panel-header"><div><h2>Transactions</h2><p>Allocate or edit imported transactions.</p></div></div>
+        <div className="panel-header"><div><h2>{activeLabel} transactions</h2><p>Allocate or edit imported transactions.</p></div></div>
         <div className="table-wrap">
           <table className="data-table">
             <thead><tr><th>Payer</th><th>Reference</th><th>Amount</th><th>Status</th><th>Allocated</th><th>Actions</th></tr></thead>
@@ -329,7 +381,7 @@ function PaymentsPanel({ token, role }) {
                 <tr key={payment.id}>
                   <td>{payment.payer_name}</td>
                   <td>{payment.reference}</td>
-                  <td>R {Number(payment.amount).toFixed(2)}</td>
+                  <td>R {Number(payment.amount || 0).toFixed(2)}</td>
                   <td>{payment.status}</td>
                   <td>{payment.allocated_to || '-'}</td>
                   <td className="action-cell">
@@ -380,10 +432,9 @@ function UserManagementPanel({ token, role }) {
     const newPassword = window.prompt(`New password for ${user.email}`)
     if (!newPassword) return
     await apiFetch(`/api/users/${user.id}/reset-password`, {
-      method: 'POST',
+      method: 'PUT',
       body: JSON.stringify({ new_password: newPassword }),
     }, token)
-    loadUsers()
   }
 
   const toggleActive = async (user) => {
@@ -394,23 +445,38 @@ function UserManagementPanel({ token, role }) {
     loadUsers()
   }
 
-  if (role !== 'admin') return <div className="panel"><h2>User management</h2><p>Only admin can manage users and reset passwords.</p></div>
+  if (role !== 'admin') return <div className="panel"><h2>User management</h2><p>Only admin can manage platform users.</p></div>
 
   return (
     <div className="employees-grid">
       <div className="panel">
-        <div className="panel-header"><div><h2>Create user</h2><p>Add admin, franchisee, or user accounts.</p></div></div>
-        <div className="form-group"><label>Name</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-        <div className="form-group"><label>Email</label><input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+        <div className="panel-header"><div><h2>Create user</h2><p>Add admins, franchisees, or basic users.</p></div></div>
+        <div className="form-group"><label>Name</label><input value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} /></div>
+        <div className="form-group"><label>Email</label><input type="email" value={form.email} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} /></div>
+        <div className="form-group"><label>Password</label><input type="password" value={form.password} onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))} /></div>
         <div className="grid-two">
-          <div className="form-group"><label>Password</label><input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
-          <div className="form-group"><label>Role</label><select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}><option value="user">User</option><option value="franchisee">Franchisee</option><option value="admin">Admin</option></select></div>
+          <div className="form-group">
+            <label>Role</label>
+            <select value={form.role} onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value }))}>
+              <option value="user">User</option>
+              <option value="franchisee">Franchisee</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Status</label>
+            <select value={String(form.is_active)} onChange={(e) => setForm((prev) => ({ ...prev, is_active: e.target.value === 'true' }))}>
+              <option value="true">Active</option>
+              <option value="false">Disabled</option>
+            </select>
+          </div>
         </div>
         <button className="btn btn-primary" type="button" onClick={createUser}>Create user</button>
         {error ? <div className="auth-error top-gap">{error}</div> : null}
       </div>
+
       <div className="panel">
-        <div className="panel-header"><div><h2>Existing users</h2><p>Admin-only account management.</p></div></div>
+        <div className="panel-header"><div><h2>Existing users</h2><p>Reset passwords or disable access.</p></div></div>
         <div className="table-wrap">
           <table className="data-table">
             <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
@@ -457,20 +523,15 @@ function ReportsPanel({ token, role, reports, onRefresh }) {
 }
 
 function MembersPanel({ data, activeSubtab, setActiveSubtab }) {
-  const categories = [
-    { key: 'insMembers', label: 'Ins Members' },
-    { key: 'membershipClub', label: 'Membership Club' },
-    { key: 'society', label: 'Society' },
-  ]
-
   const rows = data[activeSubtab] || []
+  const activeLabel = MEMBER_TABS.find((item) => item.key === activeSubtab)?.label || 'Members'
 
   return (
     <div className="stack-lg">
       <div className="panel">
         <div className="panel-header"><div><h2>Members</h2><p>View imported member records by section.</p></div></div>
         <div className="subtab-row">
-          {categories.map((category) => (
+          {MEMBER_TABS.map((category) => (
             <button
               key={category.key}
               type="button"
@@ -484,7 +545,7 @@ function MembersPanel({ data, activeSubtab, setActiveSubtab }) {
       </div>
 
       <div className="panel">
-        <div className="panel-header"><div><h2>{categories.find((c) => c.key === activeSubtab)?.label}</h2><p>{rows.length} record{rows.length === 1 ? '' : 's'} loaded.</p></div></div>
+        <div className="panel-header"><div><h2>{activeLabel}</h2><p>{rows.length} record{rows.length === 1 ? '' : 's'} loaded.</p></div></div>
         <div className="table-wrap">
           <table className="data-table">
             <thead>
@@ -516,12 +577,56 @@ function MembersPanel({ data, activeSubtab, setActiveSubtab }) {
   )
 }
 
+function ServicesPanel({ activeSubtab, setActiveSubtab }) {
+  const activeService = SERVICE_CONTENT[activeSubtab] || SERVICE_CONTENT.funerals
+
+  return (
+    <div className="stack-lg">
+      <div className="panel">
+        <div className="panel-header"><div><h2>Services</h2><p>Select a service section to review linked documents and workflow requirements.</p></div></div>
+        <div className="subtab-row">
+          {SERVICE_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              className={`subtab-btn ${activeSubtab === tab.key ? 'subtab-btn-active' : ''}`}
+              onClick={() => setActiveSubtab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="content-grid service-grid">
+        <div className="panel">
+          <div className="panel-header"><div><h2>{activeService.title}</h2><p>{activeService.description}</p></div></div>
+          <div className="badge-row">
+            <span className="pill">Case intake</span>
+            <span className="pill">Documents linked</span>
+            <span className="pill">Ready for workflow rules</span>
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-header"><div><h2>Required documents</h2><p>Use this as the linked checklist for the selected service type.</p></div></div>
+          <div className="document-list">
+            {activeService.documents.map((document) => <span key={document} className="document-chip">{document}</span>)}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function DashboardShell({ auth, onLogout }) {
   const user = auth?.user || {}
   const token = auth?.token || ''
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [active, setActive] = useState('overview')
   const [activeMemberSubtab, setActiveMemberSubtab] = useState('insMembers')
+  const [activeServiceSubtab, setActiveServiceSubtab] = useState('funerals')
+  const [activePaymentSubtab, setActivePaymentSubtab] = useState('insReceipt')
   const [reports, setReports] = useState(null)
   const [memberData, setMemberData] = useState(() => {
     try {
@@ -532,14 +637,15 @@ function DashboardShell({ auth, onLogout }) {
     }
   })
 
-  const navItems = useMemo(() => {
-    const items = [
+  const menuSections = useMemo(() => {
+    const sections = [
       { key: 'overview', label: 'Overview' },
-      { key: 'payments', label: 'Payments' },
-      { key: 'members', label: 'Members' },
+      { key: 'members', label: 'Members', items: MEMBER_TABS },
+      { key: 'services', label: 'Services', items: SERVICE_TABS },
+      { key: 'payments', label: 'Payments', items: PAYMENT_TABS },
     ]
-    if (user?.role === 'admin') items.push({ key: 'users', label: 'User Management' }, { key: 'reports', label: 'Reports' })
-    return items
+    if (user?.role === 'admin') sections.push({ key: 'users', label: 'User Management' }, { key: 'reports', label: 'Reports' })
+    return sections
   }, [user?.role])
 
   useEffect(() => {
@@ -578,9 +684,36 @@ function DashboardShell({ auth, onLogout }) {
     refreshReports()
   }, [token])
 
+  const headingMap = {
+    overview: 'Overview',
+    members: 'Members',
+    services: 'Services',
+    payments: 'Payments',
+    users: 'User Management',
+    reports: 'Reports',
+  }
+
+  const subtitleMap = {
+    overview: 'Admin and franchisee rules are active in both UI and backend routes.',
+    members: 'Review and manage member records by section from the left sidebar.',
+    services: 'Service subtabs now align cleanly and group linked documents by workflow.',
+    payments: 'Payment receipt subtabs are fixed and grouped professionally in the left sidebar.',
+    users: 'Create and manage portal access for admins, franchisees, and users.',
+    reports: 'Summary reporting remains available for admin access.',
+  }
+
+  const openSection = (sectionKey, subtabKey) => {
+    setActive(sectionKey)
+    if (sectionKey === 'members' && subtabKey) setActiveMemberSubtab(subtabKey)
+    if (sectionKey === 'services' && subtabKey) setActiveServiceSubtab(subtabKey)
+    if (sectionKey === 'payments' && subtabKey) setActivePaymentSubtab(subtabKey)
+    setSidebarOpen(false)
+  }
+
   const renderPanel = () => {
-    if (active === 'payments') return <PaymentsPanel token={token} role={user?.role} />
+    if (active === 'payments') return <PaymentsPanel token={token} role={user?.role} activeSubtab={activePaymentSubtab} setActiveSubtab={setActivePaymentSubtab} />
     if (active === 'members') return <MembersPanel data={memberData} activeSubtab={activeMemberSubtab} setActiveSubtab={setActiveMemberSubtab} />
+    if (active === 'services') return <ServicesPanel activeSubtab={activeServiceSubtab} setActiveSubtab={setActiveServiceSubtab} />
     if (active === 'users') return <UserManagementPanel token={token} role={user?.role} />
     if (active === 'reports') return <ReportsPanel token={token} role={user?.role} reports={reports} onRefresh={refreshReports} />
     return <OverviewPanel user={user} reports={reports} />
@@ -593,12 +726,12 @@ function DashboardShell({ auth, onLogout }) {
 
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-brand">
-          <Logo small />
+          <Logo small className="sidebar-logo-only" />
         </div>
 
         <div className="sidebar-user">
-          <div className="sidebar-brand-mark">MD</div>
-          <div>
+          <Logo small className="sidebar-user-logo" />
+          <div className="sidebar-user-copy">
             <strong>{user?.name || 'User'}</strong>
             <p>{user?.email || ''}</p>
             <span className="pill">{user?.role || 'unknown'}</span>
@@ -606,24 +739,39 @@ function DashboardShell({ auth, onLogout }) {
         </div>
 
         <nav className="sidebar-nav">
-          {navItems.map((item) => (
-            <button
-              key={item.key}
-              className={`nav-btn ${active === item.key ? 'nav-btn-active' : ''}`}
-              type="button"
-              onClick={() => { setActive(item.key); setSidebarOpen(false) }}
-            >
-              {item.label}
-            </button>
-          ))}
+          {menuSections.map((section) => (
+            <div key={section.key} className={`nav-group ${active === section.key ? 'nav-group-active' : ''}`}>
+              <button
+                className={`nav-btn ${active === section.key ? 'nav-btn-active' : ''}`}
+                type="button"
+                onClick={() => openSection(section.key)}
+              >
+                {section.label}
+              </button>
 
-          {active === 'members' ? (
-            <div className="sidebar-subnav">
-              <button className={`subnav-btn ${activeMemberSubtab === 'insMembers' ? 'subnav-btn-active' : ''}`} type="button" onClick={() => setActiveMemberSubtab('insMembers')}>Ins Members</button>
-              <button className={`subnav-btn ${activeMemberSubtab === 'membershipClub' ? 'subnav-btn-active' : ''}`} type="button" onClick={() => setActiveMemberSubtab('membershipClub')}>Membership Club</button>
-              <button className={`subnav-btn ${activeMemberSubtab === 'society' ? 'subnav-btn-active' : ''}`} type="button" onClick={() => setActiveMemberSubtab('society')}>Society</button>
+              {section.items ? (
+                <div className="sidebar-subnav">
+                  {section.items.map((item) => {
+                    const isActive =
+                      (section.key === 'members' && active === 'members' && activeMemberSubtab === item.key) ||
+                      (section.key === 'services' && active === 'services' && activeServiceSubtab === item.key) ||
+                      (section.key === 'payments' && active === 'payments' && activePaymentSubtab === item.key)
+
+                    return (
+                      <button
+                        key={item.key}
+                        className={`subnav-btn ${isActive ? 'subnav-btn-active' : ''}`}
+                        type="button"
+                        onClick={() => openSection(section.key, item.key)}
+                      >
+                        {item.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : null}
             </div>
-          ) : null}
+          ))}
         </nav>
 
         <div className="sidebar-footer">
@@ -634,10 +782,10 @@ function DashboardShell({ auth, onLogout }) {
       <main className="main-content">
         <div className="topbar">
           <div className="topbar-title-wrap">
-            <h1>{navItems.find((item) => item.key === active)?.label || 'Dashboard'}</h1>
-            <p>{active === 'members' ? 'Members imported into Ins Members, Membership Club, and Society will appear here.' : 'Admin and franchisee rules are active in both UI and backend routes.'}</p>
+            <h1>{headingMap[active] || 'Dashboard'}</h1>
+            <p>{subtitleMap[active] || 'Martinsdirect Operations Portal'}</p>
           </div>
-          <div className="topbar-right"><Logo small /></div>
+          <div className="topbar-right"><Logo small className="topbar-logo-only" /></div>
         </div>
         {renderPanel()}
       </main>
