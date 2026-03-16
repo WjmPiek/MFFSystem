@@ -1,0 +1,27 @@
+<svg width="920" height="280" viewBox="0 0 920 280" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Martinsdirect Operations Portal logo</title>
+  <desc id="desc">High definition Martinsdirect brand mark in purple and gold.</desc>
+  <defs>
+    <linearGradient id="g1" x1="28" y1="28" x2="276" y2="252" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7B5AA6"/>
+      <stop offset="1" stop-color="#A388CB"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="236" y1="52" x2="876" y2="240" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6F4D99"/>
+      <stop offset="1" stop-color="#C4B0E1"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="0" width="920" height="280" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#6F4D99" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <rect x="20" y="20" width="880" height="240" rx="120" fill="white"/>
+    <path d="M78 140C78 90.2944 118.294 50 168 50H306C264 76 236 116 236 160C236 203.8 263.8 224.4 307 230H168C118.294 230 78 189.706 78 140Z" fill="url(#g1)"/>
+    <path d="M46 140C46 72.6213 100.621 18 168 18H346C278 48.5 234 108 234 170C234 227.6 275.4 254.6 343 262H168C100.621 262 46 207.379 46 140Z" stroke="#7B5AA6" stroke-width="16"/>
+    <path d="M188 75V208" stroke="#D6B15E" stroke-width="8" stroke-linecap="round"/>
+    <path d="M228 75V208" stroke="#D6B15E" stroke-width="8" stroke-linecap="round"/>
+    <text x="270" y="118" fill="url(#g2)" font-family="Georgia, 'Times New Roman', serif" font-size="74" font-style="italic" font-weight="700">Martin’s</text>
+    <text x="278" y="170" fill="#1F2430" font-family="Arial, sans-serif" font-size="54" font-weight="700" letter-spacing="1">DIRECT</text>
+    <text x="280" y="212" fill="#6E7381" font-family="Arial, sans-serif" font-size="28" font-weight="600" letter-spacing="4">OPERATIONS PORTAL</text>
+  </g>
+</svg>

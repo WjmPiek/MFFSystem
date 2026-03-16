@@ -1,17 +1,38 @@
+import csv
+import io
 import os
 import secrets
 from datetime import datetime, timedelta
 
 from flask import Blueprint, current_app, g, jsonify, request
+from openpyxl import load_workbook
 from werkzeug.utils import secure_filename
 
 from .extensions import db
-from .models import PaymentTransaction, User
+from .models import MemberRecord, PaymentTransaction, User
 from .permissions import auth_required, create_auth_token, normalize_role, roles_required
 from .services.statement_parser import StatementParseError, StatementParser
 
 api = Blueprint('api', __name__)
 RESET_TOKENS = {}
+
+MEMBER_CATEGORY_MAP = {
+    'ins members': 'ins_members',
+    'ins_members': 'ins_members',
+    'ins-members': 'ins_members',
+    'membership club': 'membership_club',
+    'membership_club': 'membership_club',
+    'membership-club': 'membership_club',
+    'society': 'society',
+}
+DISPLAY_CATEGORY = {
+    'ins_members': 'Ins Members',
+    'membership_club': 'Membership Club',
+    'society': 'Society',
+}
+MEMBER_FIELDS = [
+    'member_number', 'first_name', 'last_name', 'full_name', 'email', 'phone', 'join_date', 'status', 'organisation_name', 'notes'
+]
 
 
 def _json():
@@ -28,6 +49,164 @@ def _seed_sample_payments():
     ]
     db.session.add_all(samples)
     db.session.commit()
+
+
+def _normalize_member_category(value):
+    key = (value or '').strip().lower()
+    return MEMBER_CATEGORY_MAP.get(key, key if key in DISPLAY_CATEGORY else None)
+
+
+def _clean_text(value):
+    if value is None:
+        return ''
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    return str(value).strip()
+
+
+def _normalize_header(value):
+    return _clean_text(value).lower().replace('&', 'and').replace('-', ' ').replace('_', ' ')
+
+
+def _build_member_payload(row):
+    member_number = row.get('member_number') or row.get('member_id') or row.get('membership_number') or row.get('member no') or row.get('member no.') or row.get('number') or ''
+    first_name = row.get('first_name') or row.get('name') or ''
+    last_name = row.get('last_name') or row.get('surname') or ''
+    full_name = row.get('full_name') or ' '.join(part for part in [first_name, last_name] if part).strip()
+    email = row.get('email') or ''
+    phone = row.get('phone') or row.get('cell') or row.get('mobile') or ''
+    join_date = row.get('join_date') or row.get('join date') or row.get('date_joined') or ''
+    status = row.get('status') or 'Active'
+    organisation_name = row.get('organisation_name') or row.get('club_name') or row.get('society_name') or row.get('group_name') or ''
+    notes = row.get('notes') or ''
+    if not full_name:
+        full_name = email or member_number
+    return {
+        'member_number': member_number or None,
+        'first_name': first_name or None,
+        'last_name': last_name or None,
+        'full_name': full_name or None,
+        'email': email or None,
+        'phone': phone or None,
+        'join_date': join_date or None,
+        'status': status or None,
+        'organisation_name': organisation_name or None,
+        'notes': notes or None,
+    }
+
+
+def _validate_member_payload(category, payload, row_number):
+    errors = []
+    if not payload.get('full_name'):
+        errors.append('Full name or first/surname is required.')
+    if not payload.get('email') and not payload.get('member_number'):
+        errors.append('Email or Member ID is required for duplicate detection.')
+    if payload.get('email') and '@' not in payload['email']:
+        errors.append('Email address is invalid.')
+    return {'category': category, 'row_number': row_number, 'errors': errors, 'payload': payload}
+
+
+def _rows_from_sheet(ws):
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return []
+    headers = [_normalize_header(v) for v in rows[0]]
+    out = []
+    for values in rows[1:]:
+        if not values or not any(v not in (None, '') for v in values):
+            continue
+        mapped = {}
+        for idx, header in enumerate(headers):
+            if not header:
+                continue
+            mapped[header] = _clean_text(values[idx]) if idx < len(values) else ''
+        out.append(mapped)
+    return out
+
+
+def _parse_member_file(filename, file_bytes):
+    lower = filename.lower()
+    parsed = {}
+    if lower.endswith('.xlsx'):
+        wb = load_workbook(io.BytesIO(file_bytes), data_only=True)
+        for sheet_name in wb.sheetnames:
+            category = _normalize_member_category(sheet_name)
+            if not category:
+                continue
+            parsed[category] = _rows_from_sheet(wb[sheet_name])
+    elif lower.endswith('.csv'):
+        category = _normalize_member_category(request.form.get('category') or request.args.get('category') or '')
+        if not category:
+            raise ValueError('CSV imports require a category selection.')
+        reader = csv.DictReader(io.StringIO(file_bytes.decode('utf-8-sig')))
+        parsed[category] = [{_normalize_header(k): _clean_text(v) for k, v in row.items()} for row in reader]
+    else:
+        raise ValueError('Only .xlsx and .csv member imports are supported.')
+    if not parsed:
+        raise ValueError('No supported member sheets were found. Use Ins Members, Membership Club, and Society sheet names.')
+    return parsed
+
+
+def _member_import_preview(filename, file_bytes):
+    parsed = _parse_member_file(filename, file_bytes)
+    existing = {}
+    for record in MemberRecord.query.all():
+        existing.setdefault(record.category, set()).update(filter(None, [
+            (record.email or '').strip().lower(),
+            (record.member_number or '').strip().lower(),
+        ]))
+    preview_rows = []
+    errors = []
+    duplicates = []
+    summary = {key: {'rows': 0, 'valid': 0, 'duplicates': 0, 'errors': 0} for key in DISPLAY_CATEGORY}
+    for category, rows in parsed.items():
+        for idx, raw in enumerate(rows, start=2):
+            payload = _build_member_payload(raw)
+            result = _validate_member_payload(category, payload, idx)
+            summary[category]['rows'] += 1
+            keys = [k for k in [
+                (payload.get('email') or '').strip().lower(),
+                (payload.get('member_number') or '').strip().lower(),
+            ] if k]
+            is_duplicate = any(k in existing.get(category, set()) for k in keys)
+            if result['errors']:
+                summary[category]['errors'] += 1
+                errors.append({
+                    'category': category,
+                    'row_number': idx,
+                    'full_name': payload.get('full_name'),
+                    'errors': result['errors'],
+                })
+            elif is_duplicate:
+                summary[category]['duplicates'] += 1
+                summary[category]['valid'] += 1
+                duplicates.append({
+                    'category': category,
+                    'row_number': idx,
+                    'full_name': payload.get('full_name'),
+                    'email': payload.get('email'),
+                    'member_number': payload.get('member_number'),
+                })
+                preview_rows.append({'category': category, **payload, 'row_number': idx, 'action': 'update'})
+            else:
+                summary[category]['valid'] += 1
+                preview_rows.append({'category': category, **payload, 'row_number': idx, 'action': 'create'})
+    return {'rows': preview_rows, 'errors': errors, 'duplicates': duplicates, 'summary': summary}
+
+
+def _upsert_member(category, payload, filename):
+    query = None
+    if payload.get('email'):
+        query = MemberRecord.query.filter(db.func.lower(MemberRecord.email) == payload['email'].lower(), MemberRecord.category == category).first()
+    if query is None and payload.get('member_number'):
+        query = MemberRecord.query.filter(db.func.lower(MemberRecord.member_number) == payload['member_number'].lower(), MemberRecord.category == category).first()
+    record = query or MemberRecord(category=category)
+    for field in MEMBER_FIELDS:
+        setattr(record, field, payload.get(field))
+    record.source_filename = filename
+    if query is None:
+        db.session.add(record)
+    return record, query is None
 
 
 @api.get('/health')
@@ -195,6 +374,80 @@ def delete_user(user_id):
     db.session.delete(user)
     db.session.commit()
     return jsonify({'message': 'User deleted.'}), 200
+
+
+@api.get('/members')
+@roles_required('admin', 'franchisee')
+def list_members():
+    category = _normalize_member_category(request.args.get('category') or 'ins_members') or 'ins_members'
+    records = MemberRecord.query.filter_by(category=category).order_by(MemberRecord.full_name.asc()).all()
+    return jsonify({
+        'category': category,
+        'label': DISPLAY_CATEGORY.get(category, category),
+        'members': [record.to_dict() for record in records],
+    }), 200
+
+
+@api.get('/members/import-template-info')
+@roles_required('admin', 'franchisee')
+def member_import_template_info():
+    return jsonify({
+        'template_path': '/templates/members-import-template.xlsx',
+        'categories': [
+            {'key': 'ins_members', 'label': 'Ins Members'},
+            {'key': 'membership_club', 'label': 'Membership Club'},
+            {'key': 'society', 'label': 'Society'},
+        ],
+        'required_columns': ['Member ID / Email', 'Name or First Name + Surname'],
+        'notes': [
+            'Use the provided workbook template and keep the sheet names unchanged.',
+            'Preview checks duplicates, missing names, and invalid emails before saving.',
+            'Commit imports create new records and update matching records by Email or Member ID within each category.',
+        ],
+    }), 200
+
+
+@api.post('/members/import/preview')
+@roles_required('admin', 'franchisee')
+def preview_member_import():
+    import_file = request.files.get('file') or next(iter(request.files.values()), None)
+    if not import_file or not import_file.filename:
+        return jsonify({'error': 'Choose an Excel or CSV file to preview.'}), 400
+    try:
+        preview = _member_import_preview(import_file.filename, import_file.read())
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    return jsonify(preview), 200
+
+
+@api.post('/members/import/commit')
+@roles_required('admin', 'franchisee')
+def commit_member_import():
+    import_file = request.files.get('file') or next(iter(request.files.values()), None)
+    if not import_file or not import_file.filename:
+        return jsonify({'error': 'Choose an Excel or CSV file to import.'}), 400
+    filename = secure_filename(import_file.filename) or 'members-import.xlsx'
+    try:
+        preview = _member_import_preview(filename, import_file.read())
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    created = 0
+    updated = 0
+    for row in preview['rows']:
+        category = row['category']
+        payload = {key: row.get(key) for key in MEMBER_FIELDS}
+        _, is_created = _upsert_member(category, payload, filename)
+        created += 1 if is_created else 0
+        updated += 0 if is_created else 1
+    db.session.commit()
+    return jsonify({
+        'message': f'Member import completed. {created} created, {updated} updated.',
+        'created': created,
+        'updated': updated,
+        'duplicates_skipped': len(preview['duplicates']),
+        'errors': preview['errors'],
+        'summary': preview['summary'],
+    }), 200
 
 
 @api.get('/payments')
