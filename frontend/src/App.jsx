@@ -1,25 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import * as XLSX from 'xlsx'
 import './assets/styles/globals.css'
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
-const IS_REMOTE_APP = typeof window !== 'undefined' && /^https?:\/\//.test(window.location.origin)
 const STORAGE_KEY = 'martinsdirect_auth'
-const API_CONFIG_ERROR = 'Frontend API URL is not configured. Set VITE_API_URL before deploying.'
-const MEMBER_IMPORTS_KEY = 'martinsdirect_member_imports'
-const MEMBER_TEMPLATE_URL = '/templates/members-import-template.xlsx'
-const MEMBER_SECTIONS = [
-  { key: 'ins-members', label: 'Ins Members', sheet: 'Ins Members' },
-  { key: 'membership-club', label: 'Membership Club', sheet: 'Membership Club' },
-  { key: 'society', label: 'Society', sheet: 'Society' },
+const MEMBER_CATEGORIES = [
+  { key: 'ins_members', label: 'Ins Members' },
+  { key: 'membership_club', label: 'Membership Club' },
+  { key: 'society', label: 'Society' },
 ]
 
 function apiUrl(path) {
-  if (API_BASE_URL) return `${API_BASE_URL}${path}`
-  if (IS_REMOTE_APP) {
-    throw new Error(API_CONFIG_ERROR)
-  }
-  return path
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path
 }
 
 async function apiFetch(path, options = {}, token) {
@@ -29,16 +20,9 @@ async function apiFetch(path, options = {}, token) {
     ...(options.headers || {}),
   }
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
+  if (token) headers.Authorization = `Bearer ${token}`
 
-  let response
-  try {
-    response = await fetch(apiUrl(path), { ...options, headers, mode: 'cors' })
-  } catch (error) {
-    throw new Error(error?.message === API_CONFIG_ERROR ? API_CONFIG_ERROR : 'Cannot reach the backend. Check CORS, backend URL, and backend health.')
-  }
+  const response = await fetch(apiUrl(path), { ...options, headers })
   const data = await response.json().catch(() => ({}))
 
   if (!response.ok) {
@@ -48,194 +32,12 @@ async function apiFetch(path, options = {}, token) {
   return data
 }
 
-function readStoredMemberImports() {
-  try {
-    const stored = localStorage.getItem(MEMBER_IMPORTS_KEY)
-    return stored ? JSON.parse(stored) : {}
-  } catch {
-    return {}
-  }
-}
-
-function normaliseRow(row = {}) {
-  return {
-    memberId: row['Member ID'] || row.memberId || '',
-    fullName: row['Full Name'] || row.fullName || row.Name || '',
-    email: row.Email || row.email || '',
-    phone: row.Phone || row.phone || '',
-    status: row.Status || row.status || '',
-    reference: row.Reference || row.reference || '',
-    branchGroup: row['Branch/Group'] || row.branchGroup || row.Group || '',
-    notes: row.Notes || row.notes || '',
-  }
-}
-
-function parseMemberWorkbook(file) {
-  return file.arrayBuffer().then((buffer) => {
-    const workbook = XLSX.read(buffer, { type: 'array' })
-    const parsed = {}
-
-    MEMBER_SECTIONS.forEach((section) => {
-      const worksheet = workbook.Sheets[section.sheet]
-      if (!worksheet) {
-        parsed[section.key] = []
-        return
-      }
-      const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' })
-      parsed[section.key] = rows
-        .map((row) => normaliseRow(row))
-        .filter((row) => row.fullName || row.memberId || row.reference)
-    })
-
-    return parsed
-  })
-}
-
-function MemberCard({ title, description, items = [] }) {
-  return (
-    <div className="panel">
-      <div className="panel-header"><div><h2>{title}</h2><p>{description}</p></div></div>
-      <div className="badge-row">
-        {items.map((item) => <span key={item} className="pill">{item}</span>)}
-      </div>
-    </div>
-  )
-}
-
-function MembersPanel({ section, importedData }) {
-  const rows = importedData?.[section] || []
-  const sectionMeta = MEMBER_SECTIONS.find((item) => item.key === section)
-
-  if (!rows.length) {
-    return (
-      <div className="stack-lg">
-        <MemberCard
-          title={sectionMeta?.label || 'Members'}
-          description="No imported records found yet. Use Import Data to upload the Excel template and load members into this tab."
-          items={['Excel import ready', 'Template available', 'Data appears here after upload']}
-        />
-      </div>
-    )
-  }
-
-  return (
-    <div className="stack-lg">
-      <MemberCard
-        title={sectionMeta?.label || 'Members'}
-        description={`Imported member records currently loaded under ${sectionMeta?.label || 'Members'}.`}
-        items={[`${rows.length} record(s) loaded`, 'Excel template compatible', 'Data ready for review']}
-      />
-      <div className="panel">
-        <div className="panel-header"><div><h2>{sectionMeta?.label}</h2><p>Imported records from the member Excel template.</p></div></div>
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead><tr><th>Member ID</th><th>Full Name</th><th>Email</th><th>Phone</th><th>Status</th><th>Reference</th><th>Branch/Group</th><th>Notes</th></tr></thead>
-            <tbody>
-              {rows.map((row, index) => (
-                <tr key={`${row.memberId}-${index}`}>
-                  <td>{row.memberId || '-'}</td>
-                  <td>{row.fullName || '-'}</td>
-                  <td>{row.email || '-'}</td>
-                  <td>{row.phone || '-'}</td>
-                  <td>{row.status || '-'}</td>
-                  <td>{row.reference || '-'}</td>
-                  <td>{row.branchGroup || '-'}</td>
-                  <td>{row.notes || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ImportDataPanel({ importedData, onImport, onClear }) {
-  const [selectedFile, setSelectedFile] = useState(null)
-  const [message, setMessage] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  const totals = useMemo(() => ({
-    insMembers: importedData?.['ins-members']?.length || 0,
-    membershipClub: importedData?.['membership-club']?.length || 0,
-    society: importedData?.society?.length || 0,
-  }), [importedData])
-
-  const totalRows = totals.insMembers + totals.membershipClub + totals.society
-
-  const handleImport = async () => {
-    if (!selectedFile) {
-      setMessage('Choose the Excel template file before importing.')
-      return
-    }
-
-    setLoading(true)
-    setMessage('')
-    try {
-      const parsed = await parseMemberWorkbook(selectedFile)
-      onImport(parsed)
-      setMessage(`Import completed. ${Object.values(parsed).flat().length} record(s) loaded into Members.`)
-      setSelectedFile(null)
-    } catch (error) {
-      setMessage(error?.message || 'Import failed. Check the Excel template and try again.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="stack-lg">
-      <div className="panel">
-        <div className="panel-header"><div><h2>Import Data</h2><p>Download the Excel template, populate the three member sheets, and import the workbook to load records under Members.</p></div></div>
-        <div className="import-download-bar">
-          <div>
-            <strong>Download Excel template</strong>
-            <p>Includes sheets for Ins Members, Membership Club, and Society.</p>
-          </div>
-          <a className="btn btn-primary" href={MEMBER_TEMPLATE_URL} download>Download template</a>
-        </div>
-        <div className="grid-two">
-          <div className="form-group">
-            <label>Upload populated .xlsx file</label>
-            <input type="file" accept=".xlsx" onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} />
-          </div>
-          <div className="import-summary">
-            <span>Total imported rows</span>
-            <strong>{totalRows}</strong>
-            <small>Loaded into Members subtabs after import.</small>
-          </div>
-        </div>
-        <div className="panel-actions">
-          <button className="btn btn-primary" type="button" onClick={handleImport} disabled={loading}>{loading ? 'Importing...' : 'Import workbook'}</button>
-          <button className="btn btn-secondary" type="button" onClick={onClear}>Clear imported data</button>
-        </div>
-        {message ? <div className="auth-error auth-info">{message}</div> : null}
-      </div>
-      <div className="content-grid">
-        <div className="stat-card"><span>Ins Members</span><strong>{totals.insMembers}</strong></div>
-        <div className="stat-card"><span>Membership Club</span><strong>{totals.membershipClub}</strong></div>
-        <div className="stat-card"><span>Society</span><strong>{totals.society}</strong></div>
-      </div>
-    </div>
-  )
-}
-
 function Logo({ small = false }) {
   const [failed, setFailed] = useState(false)
 
-  if (failed) {
-    return <div className={small ? 'logo-fallback logo-fallback-small' : 'logo-fallback'}>MD</div>
-  }
+  if (failed) return <div className={small ? 'logo-fallback logo-fallback-small' : 'logo-fallback'}>MD</div>
 
-  return (
-    <img
-      src="/logo.png"
-      alt="Martinsdirect logo"
-      className={small ? 'brand-logo-small' : 'brand-logo-large'}
-      onError={() => setFailed(true)}
-    />
-  )
+  return <img src="/logo.png" alt="Martinsdirect logo" className={small ? 'brand-logo-small' : 'brand-logo-large'} onError={() => setFailed(true)} />
 }
 
 function LoginScreen({ onLogin, onOpenReset }) {
@@ -246,32 +48,32 @@ function LoginScreen({ onLogin, onOpenReset }) {
   const [submitting, setSubmitting] = useState(false)
 
   const handleSubmit = async (event) => {
-  event.preventDefault()
-  setSubmitting(true)
-  setError('')
+    event.preventDefault()
+    setSubmitting(true)
+    setError('')
 
-  try {
-    const data = await apiFetch('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    })
+    try {
+      const data = await apiFetch('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      })
 
-    const safeAuth = {
-      token: data?.token || data?.access_token,
-      user: data?.user,
+      const safeAuth = {
+        token: data?.token || data?.access_token,
+        user: data?.user,
+      }
+
+      if (!safeAuth.token || !safeAuth.user) {
+        throw new Error('Invalid login response from server')
+      }
+
+      onLogin(safeAuth)
+    } catch (err) {
+      setError(err.message || 'Login failed')
+    } finally {
+      setSubmitting(false)
     }
-
-    if (!safeAuth.token || !safeAuth.user) {
-      throw new Error('Invalid login response from server')
-    }
-
-    onLogin(safeAuth)
-  } catch (err) {
-    setError(err.message || 'Login failed')
-  } finally {
-    setSubmitting(false)
   }
-}
 
   return (
     <div className="auth-shell">
@@ -284,14 +86,14 @@ function LoginScreen({ onLogin, onOpenReset }) {
           </div>
           <div>
             <p className="auth-eyebrow">Martinsdirect Management Platform</p>
-            <h1>Sign in to manage users, payments, reports, and statements.</h1>
+            <h1>Sign in to manage users, payments, members, reports, and imports.</h1>
             <p className="auth-copy">
-              Admin manages the full platform. Franchisees can upload bank PDF, CSV, and Excel statements, allocate payments, and edit transactions.
+              Admin manages the full platform. Franchisees can upload bank statements, import member data, allocate payments, and edit transactions.
             </p>
           </div>
           <div className="auth-feature-list">
             <div className="auth-feature-item"><strong>Admin</strong><span>Full editing, user management, reports, password resets.</span></div>
-            <div className="auth-feature-item"><strong>Franchisee</strong><span>Statement uploads, payment allocation, transaction edits.</span></div>
+            <div className="auth-feature-item"><strong>Franchisee</strong><span>Statement uploads, member imports, payment allocation, transaction edits.</span></div>
             <div className="auth-feature-item"><strong>User</strong><span>Read-only dashboard access.</span></div>
           </div>
         </section>
@@ -400,14 +202,14 @@ function StatCard({ label, value }) {
 function OverviewPanel({ user, reports }) {
   return (
     <div className="content-grid">
-      <StatCard label="Signed in role" value={user.role} />
+      <StatCard label="Signed in role" value={user?.role || '-'} />
       <StatCard label="Users" value={reports?.totals?.users ?? '-'} />
       <StatCard label="Payments" value={reports?.totals?.payments ?? '-'} />
       <div className="panel full-span">
         <div className="panel-header"><div><h2>Role access</h2><p>Platform permissions are enforced on the backend and reflected in the UI.</p></div></div>
         <div className="badge-row">
           <span className="pill">Admin: full control</span>
-          <span className="pill">Franchisee: upload bank PDF, CSV, and Excel statements, allocate payments, edit transactions</span>
+          <span className="pill">Franchisee: upload bank statements, import members, allocate payments, edit transactions</span>
           <span className="pill">User: read only</span>
         </div>
       </div>
@@ -453,10 +255,7 @@ function PaymentsPanel({ token, role }) {
         formData.append('statement', statementFile)
         if (franchiseName.trim()) formData.append('franchise_name', franchiseName.trim())
         if (bankName.trim()) formData.append('bank_name', bankName.trim())
-        await apiFetch('/api/payments/upload-statement', {
-          method: 'POST',
-          body: formData,
-        }, token)
+        await apiFetch('/api/payments/upload-statement', { method: 'POST', body: formData }, token)
         setStatementFile(null)
       } else {
         const rows = JSON.parse(uploadRows)
@@ -474,55 +273,56 @@ function PaymentsPanel({ token, role }) {
   const allocate = async (payment) => {
     const allocatedTo = window.prompt('Allocate to', payment.allocated_to || 'Franchise Fee')
     if (!allocatedTo) return
-    await apiFetch(`/api/payments/${payment.id}/allocate`, {
-      method: 'PUT',
-      body: JSON.stringify({ allocated_to: allocatedTo }),
-    }, token)
+    await apiFetch(`/api/payments/${payment.id}/allocate`, { method: 'PUT', body: JSON.stringify({ allocated_to: allocatedTo }) }, token)
     loadPayments()
   }
 
   const editPayment = async (payment) => {
     const reference = window.prompt('New reference', payment.reference)
     if (!reference) return
-    await apiFetch(`/api/payments/${payment.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ reference, status: 'edited' }),
-    }, token)
+    await apiFetch(`/api/payments/${payment.id}`, { method: 'PUT', body: JSON.stringify({ reference, status: 'edited' }) }, token)
     loadPayments()
   }
 
-  if (!canEdit) {
-    return <div className="panel"><h2>Payments</h2><p>Users can view the dashboard but cannot manage payment records.</p></div>
-  }
+  if (!canEdit) return <div className="panel"><h2>Payments</h2><p>Users can view the dashboard but cannot manage payment records.</p></div>
 
   return (
     <div className="stack-lg">
       <div className="panel">
-        <div className="panel-header"><div><h2>Upload bank statement</h2><p>Upload a text-based bank statement PDF for extraction, or switch to manual JSON import.</p></div></div>
+        <div className="panel-header"><div><h2>Upload bank statement</h2><p>Upload PDF, CSV, or Excel bank statements for supported banks, or switch to manual JSON import.</p></div></div>
         <div className="badge-row">
-          <button className={`btn ${uploadMode === 'pdf' ? 'btn-primary' : 'btn-secondary'}`} type="button" onClick={() => setUploadMode('pdf')}>PDF upload</button>
+          <button className={`btn ${uploadMode === 'file' ? 'btn-primary' : 'btn-secondary'}`} type="button" onClick={() => setUploadMode('file')}>Statement file</button>
           <button className={`btn ${uploadMode === 'json' ? 'btn-primary' : 'btn-secondary'}`} type="button" onClick={() => setUploadMode('json')}>Manual JSON</button>
         </div>
-        {uploadMode === 'pdf' ? (
+        {uploadMode === 'file' ? (
           <>
             <div className="form-group">
-              <label>Statement PDF</label>
-              <input type="file" accept="application/pdf,.pdf" onChange={(e) => setStatementFile(e.target.files?.[0] || null)} />
+              <label>Statement file</label>
+              <input type="file" accept=".pdf,.csv,.xlsx,.xls" onChange={(e) => setStatementFile(e.target.files?.[0] || null)} />
             </div>
-            <div className="form-group">
-              <label>Franchise name (optional)</label>
-              <input value={franchiseName} onChange={(e) => setFranchiseName(e.target.value)} placeholder="Pretoria West" />
+            <div className="grid-two">
+              <div className="form-group">
+                <label>Franchise name (optional)</label>
+                <input value={franchiseName} onChange={(e) => setFranchiseName(e.target.value)} placeholder="Pretoria West" />
+              </div>
+              <div className="form-group">
+                <label>Bank (optional)</label>
+                <select value={bankName} onChange={(e) => setBankName(e.target.value)}>
+                  <option value="">Auto detect</option>
+                  {importOptions.supported_banks.map((bank) => <option key={bank} value={bank}>{bank}</option>)}
+                </select>
+              </div>
             </div>
-            <p className="helper-text">Best results come from text-based bank statement PDFs with date, description, and amount columns.</p>
+            <p className="helper-text">Supported types: {(importOptions.supported_extensions || []).join(', ') || '.pdf, .csv, .xlsx, .xls'}.</p>
           </>
         ) : (
           <div className="form-group"><label>Transactions JSON</label><textarea className="text-area" value={uploadRows} onChange={(e) => setUploadRows(e.target.value)} /></div>
         )}
         <button className="btn btn-primary" type="button" onClick={uploadStatement}>Import transactions</button>
+        {error ? <div className="auth-error">{error}</div> : null}
       </div>
       <div className="panel">
         <div className="panel-header"><div><h2>Transactions</h2><p>Allocate or edit imported transactions.</p></div></div>
-        {error ? <div className="auth-error">{error}</div> : null}
         <div className="table-wrap">
           <table className="data-table">
             <thead><tr><th>Payer</th><th>Reference</th><th>Amount</th><th>Status</th><th>Allocated</th><th>Actions</th></tr></thead>
@@ -580,24 +380,16 @@ function UserManagementPanel({ token, role }) {
   const resetPassword = async (user) => {
     const newPassword = window.prompt(`New password for ${user.email}`)
     if (!newPassword) return
-    await apiFetch(`/api/users/${user.id}/reset-password`, {
-      method: 'POST',
-      body: JSON.stringify({ new_password: newPassword }),
-    }, token)
+    await apiFetch(`/api/users/${user.id}/reset-password`, { method: 'POST', body: JSON.stringify({ new_password: newPassword }) }, token)
     loadUsers()
   }
 
   const toggleActive = async (user) => {
-    await apiFetch(`/api/users/${user.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ is_active: !user.is_active }),
-    }, token)
+    await apiFetch(`/api/users/${user.id}`, { method: 'PUT', body: JSON.stringify({ is_active: !user.is_active }) }, token)
     loadUsers()
   }
 
-  if (role !== 'admin') {
-    return <div className="panel"><h2>User management</h2><p>Only admin can manage users and reset passwords.</p></div>
-  }
+  if (role !== 'admin') return <div className="panel"><h2>User management</h2><p>Only admin can manage users and reset passwords.</p></div>
 
   return (
     <div className="employees-grid">
@@ -640,9 +432,7 @@ function ReportsPanel({ token, role, reports, onRefresh }) {
     if (role === 'admin') onRefresh()
   }, [token, role])
 
-  if (role !== 'admin') {
-    return <div className="panel"><h2>Reports</h2><p>Only admin can view summary reports.</p></div>
-  }
+  if (role !== 'admin') return <div className="panel"><h2>Reports</h2><p>Only admin can view summary reports.</p></div>
 
   return (
     <div className="content-grid">
@@ -660,24 +450,264 @@ function ReportsPanel({ token, role, reports, onRefresh }) {
   )
 }
 
+function MembersPanel({ token, role, category, onCategoryChange }) {
+  const [data, setData] = useState({ members: [], label: 'Members' })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const canView = role === 'admin' || role === 'franchisee'
 
-function DashboardShell({ auth, importedData, onImportData, onClearImportedData, onLogout }) {
+  const loadMembers = async () => {
+    if (!canView) return
+    setLoading(true)
+    try {
+      const result = await apiFetch(`/api/members?category=${category}`, {}, token)
+      setData(result)
+      setError('')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadMembers()
+  }, [token, role, category])
+
+  if (!canView) return <div className="panel"><h2>Members</h2><p>Only admin and franchisee users can view imported member records.</p></div>
+
+  return (
+    <div className="stack-lg">
+      <div className="panel">
+        <div className="panel-header"><div><h2>Members</h2><p>Imported member records are grouped by category.</p></div></div>
+        <div className="subtab-row">
+          {MEMBER_CATEGORIES.map((item) => (
+            <button key={item.key} className={`subtab-btn ${category === item.key ? 'subtab-btn-active' : ''}`} type="button" onClick={() => onCategoryChange(item.key)}>{item.label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="panel">
+        <div className="panel-header"><div><h2>{data.label}</h2><p>{loading ? 'Loading imported members...' : `${data.members.length} record(s) loaded from imports.`}</p></div></div>
+        {error ? <div className="auth-error">{error}</div> : null}
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead><tr><th>Member ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Join date</th><th>Status</th><th>Group</th></tr></thead>
+            <tbody>
+              {data.members.map((member) => (
+                <tr key={member.id}>
+                  <td>{member.member_number || '-'}</td>
+                  <td>{member.full_name}</td>
+                  <td>{member.email || '-'}</td>
+                  <td>{member.phone || '-'}</td>
+                  <td>{member.join_date || '-'}</td>
+                  <td>{member.status || '-'}</td>
+                  <td>{member.organisation_name || '-'}</td>
+                </tr>
+              ))}
+              {!data.members.length ? <tr><td colSpan="7" className="empty-cell">No member records imported yet for this section.</td></tr> : null}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ImportDataPanel({ token, role, onImported, selectedCategory }) {
+  const [templateInfo, setTemplateInfo] = useState(null)
+  const [file, setFile] = useState(null)
+  const [csvCategory, setCsvCategory] = useState(selectedCategory || 'ins_members')
+  const [preview, setPreview] = useState(null)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [progress, setProgress] = useState(0)
+  const [working, setWorking] = useState(false)
+  const canImport = role === 'admin' || role === 'franchisee'
+
+  useEffect(() => {
+    if (!canImport) return
+    apiFetch('/api/members/import-template-info', {}, token)
+      .then(setTemplateInfo)
+      .catch(() => setTemplateInfo(null))
+  }, [token, role])
+
+  const runWithProgress = async (action) => {
+    setWorking(true)
+    setProgress(12)
+    setError('')
+    setMessage('')
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 180))
+      setProgress(38)
+      const result = await action()
+      setProgress(100)
+      return result
+    } finally {
+      setTimeout(() => {
+        setWorking(false)
+        setProgress(0)
+      }, 300)
+    }
+  }
+
+  const buildForm = () => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (file?.name?.toLowerCase().endsWith('.csv')) formData.append('category', csvCategory)
+    return formData
+  }
+
+  const previewImport = async () => {
+    if (!file) {
+      setError('Choose an Excel or CSV file first.')
+      return
+    }
+    try {
+      const result = await runWithProgress(() => apiFetch('/api/members/import/preview', { method: 'POST', body: buildForm() }, token))
+      setPreview(result)
+      setMessage('Preview ready. Review duplicates and validation errors before saving.')
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  const commitImport = async () => {
+    if (!file) {
+      setError('Choose an Excel or CSV file first.')
+      return
+    }
+    try {
+      const result = await runWithProgress(() => apiFetch('/api/members/import/commit', { method: 'POST', body: buildForm() }, token))
+      setPreview(null)
+      setMessage(result.message)
+      onImported(csvCategory)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  if (!canImport) return <div className="panel"><h2>Import Data</h2><p>Only admin and franchisee users can import member data.</p></div>
+
+  return (
+    <div className="stack-lg">
+      <div className="panel">
+        <div className="panel-header"><div><h2>Import portal</h2><p>Download the Excel workbook, fill in the member sheets, preview the import, then save it to the Members subtabs.</p></div></div>
+        <div className="download-bar">
+          <div>
+            <strong>Template workbook</strong>
+            <p>Sheets: Ins Members, Membership Club, Society.</p>
+          </div>
+          <div className="download-actions">
+            <a className="btn btn-secondary" href="/templates/members-import-template.xlsx" download>Download Excel template</a>
+          </div>
+        </div>
+        <div className="helper-card-grid">
+          {(templateInfo?.notes || []).map((note) => <div key={note} className="helper-card">{note}</div>)}
+        </div>
+        <div className="form-group">
+          <label>Import file</label>
+          <input type="file" accept=".xlsx,.csv" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+        </div>
+        <div className="grid-two">
+          <div className="form-group">
+            <label>CSV category</label>
+            <select value={csvCategory} onChange={(e) => setCsvCategory(e.target.value)}>
+              {MEMBER_CATEGORIES.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Selected file</label>
+            <input value={file?.name || 'No file chosen'} readOnly />
+          </div>
+        </div>
+        <div className="panel-actions">
+          <button className="btn btn-secondary" type="button" onClick={previewImport} disabled={working}>Preview import</button>
+          <button className="btn btn-primary" type="button" onClick={commitImport} disabled={working}>Save import</button>
+        </div>
+        <div className="progress-shell"><div className="progress-bar" style={{ width: `${progress}%` }} /></div>
+        {message ? <div className="auth-error auth-info">{message}</div> : null}
+        {error ? <div className="auth-error">{error}</div> : null}
+      </div>
+
+      <div className="content-grid import-summary-grid">
+        {MEMBER_CATEGORIES.map((category) => {
+          const stats = preview?.summary?.[category.key]
+          return <StatCard key={category.key} label={category.label} value={stats ? `${stats.valid} valid / ${stats.duplicates} duplicates / ${stats.errors} errors` : 'No preview yet'} />
+        })}
+      </div>
+
+      {preview ? (
+        <>
+          <div className="panel">
+            <div className="panel-header"><div><h2>Preview rows</h2><p>These rows will be imported into the matching Members subtab.</p></div></div>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead><tr><th>Category</th><th>Member ID</th><th>Name</th><th>Email</th><th>Status</th><th>Group</th></tr></thead>
+                <tbody>
+                  {preview.rows.slice(0, 20).map((row, index) => (
+                    <tr key={`${row.category}-${row.row_number}-${index}`}>
+                      <td>{MEMBER_CATEGORIES.find((item) => item.key === row.category)?.label || row.category}</td>
+                      <td>{row.member_number || '-'}</td>
+                      <td>{row.full_name}</td>
+                      <td>{row.email || '-'}</td>
+                      <td>{row.status || '-'}</td>
+                      <td>{row.organisation_name || '-'}</td>
+                    </tr>
+                  ))}
+                  {!preview.rows.length ? <tr><td colSpan="6" className="empty-cell">No valid rows in preview.</td></tr> : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="panel">
+            <div className="panel-header"><div><h2>Validation results</h2><p>Fix these rows before saving if you want them included.</p></div></div>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead><tr><th>Type</th><th>Category</th><th>Row</th><th>Name</th><th>Details</th></tr></thead>
+                <tbody>
+                  {preview.errors.map((row, index) => (
+                    <tr key={`error-${index}`}>
+                      <td>Error</td>
+                      <td>{MEMBER_CATEGORIES.find((item) => item.key === row.category)?.label || row.category}</td>
+                      <td>{row.row_number}</td>
+                      <td>{row.full_name || '-'}</td>
+                      <td>{(row.errors || []).join(', ')}</td>
+                    </tr>
+                  ))}
+                  {preview.duplicates.map((row, index) => (
+                    <tr key={`duplicate-${index}`}>
+                      <td>Duplicate</td>
+                      <td>{MEMBER_CATEGORIES.find((item) => item.key === row.category)?.label || row.category}</td>
+                      <td>{row.row_number}</td>
+                      <td>{row.full_name || '-'}</td>
+                      <td>Existing Email/Member ID already loaded.</td>
+                    </tr>
+                  ))}
+                  {!preview.errors.length && !preview.duplicates.length ? <tr><td colSpan="5" className="empty-cell">No duplicates or validation issues found.</td></tr> : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
+function DashboardShell({ auth, onLogout }) {
   const user = auth?.user || {}
   const token = auth?.token || ''
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [active, setActive] = useState('overview')
-  const [membersOpen, setMembersOpen] = useState(true)
   const [reports, setReports] = useState(null)
+  const [memberCategory, setMemberCategory] = useState('ins_members')
 
   const navItems = useMemo(() => {
     const items = [
       { key: 'overview', label: 'Overview' },
       { key: 'payments', label: 'Payments' },
-      { key: 'members', label: 'Members', children: [
-        { key: 'ins-members', label: 'Ins Members' },
-        { key: 'membership-club', label: 'Membership Club' },
-        { key: 'society', label: 'Society' },
-      ] },
+      { key: 'members', label: 'Members' },
+      { key: 'import-data', label: 'Import Data' },
     ]
     if (user?.role === 'admin') items.push({ key: 'users', label: 'User Management' }, { key: 'reports', label: 'Reports' })
     return items
@@ -698,7 +728,8 @@ function DashboardShell({ auth, importedData, onImportData, onClearImportedData,
 
   const renderPanel = () => {
     if (active === 'payments') return <PaymentsPanel token={token} role={user?.role} />
-    if (active === 'ins-members' || active === 'membership-club' || active === 'society') return <MembersPanel section={active} />
+    if (active === 'members') return <MembersPanel token={token} role={user?.role} category={memberCategory} onCategoryChange={setMemberCategory} />
+    if (active === 'import-data') return <ImportDataPanel token={token} role={user?.role} selectedCategory={memberCategory} onImported={(category) => { setMemberCategory(category || memberCategory); setActive('members') }} />
     if (active === 'users') return <UserManagementPanel token={token} role={user?.role} />
     if (active === 'reports') return <ReportsPanel token={token} role={user?.role} reports={reports} onRefresh={refreshReports} />
     return <OverviewPanel user={user} reports={reports} />
@@ -719,27 +750,19 @@ function DashboardShell({ auth, importedData, onImportData, onClearImportedData,
         </div>
         <nav className="sidebar-nav">
           {navItems.map((item) => (
-            item.children ? (
-              <div key={item.key} className="sidebar-group">
-                <button className={`nav-btn ${item.children.some((child) => child.key === active) ? 'nav-btn-active' : ''}`} type="button" onClick={() => setMembersOpen((value) => !value)}>
+            <button key={item.key} className={`nav-btn ${active === item.key ? 'nav-btn-active' : ''}`} type="button" onClick={() => { setActive(item.key); setSidebarOpen(false) }}>
+              {item.label}
+            </button>
+          ))}
+          {active === 'members' ? (
+            <div className="sidebar-subnav">
+              {MEMBER_CATEGORIES.map((item) => (
+                <button key={item.key} className={`subnav-btn ${memberCategory === item.key ? 'subnav-btn-active' : ''}`} type="button" onClick={() => { setMemberCategory(item.key); setSidebarOpen(false) }}>
                   {item.label}
                 </button>
-                {membersOpen ? (
-                  <div className="subnav">
-                    {item.children.map((child) => (
-                      <button key={child.key} className={`nav-sub-btn ${active === child.key ? 'nav-sub-btn-active' : ''}`} type="button" onClick={() => { setActive(child.key); setSidebarOpen(false) }}>
-                        {child.label}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <button key={item.key} className={`nav-btn ${active === item.key ? 'nav-btn-active' : ''}`} type="button" onClick={() => { setActive(item.key); setSidebarOpen(false) }}>
-                {item.label}
-              </button>
-            )
-          ))}
+              ))}
+            </div>
+          ) : null}
         </nav>
         <div className="sidebar-footer">
           <button className="btn btn-secondary" type="button" onClick={onLogout}>Log out</button>
@@ -766,7 +789,6 @@ export default function App() {
       return null
     }
   })
-  const [importedData, setImportedData] = useState(() => readStoredMemberImports())
   const [resetOpen, setResetOpen] = useState(false)
   const [resetToken, setResetToken] = useState('')
 
@@ -774,10 +796,6 @@ export default function App() {
     if (auth) localStorage.setItem(STORAGE_KEY, JSON.stringify(auth))
     else localStorage.removeItem(STORAGE_KEY)
   }, [auth])
-
-  useEffect(() => {
-    localStorage.setItem(MEMBER_IMPORTS_KEY, JSON.stringify(importedData))
-  }, [importedData])
 
   if (!auth) {
     return (
@@ -788,5 +806,5 @@ export default function App() {
     )
   }
 
-  return <DashboardShell auth={auth} importedData={importedData} onImportData={setImportedData} onClearImportedData={() => setImportedData({})} onLogout={() => setAuth(null)} />
+  return <DashboardShell auth={auth} onLogout={() => setAuth(null)} />
 }
