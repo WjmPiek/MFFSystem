@@ -2,16 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import './assets/styles/globals.css'
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
-const IS_REMOTE_APP = typeof window !== 'undefined' && /^https?:\/\//.test(window.location.origin)
 const STORAGE_KEY = 'martinsdirect_auth'
-const API_CONFIG_ERROR = 'Frontend API URL is not configured. Set VITE_API_URL before deploying.'
+const MEMBERS_KEY = 'martinsdirect_members_data'
 
 function apiUrl(path) {
-  if (API_BASE_URL) return `${API_BASE_URL}${path}`
-  if (IS_REMOTE_APP) {
-    throw new Error(API_CONFIG_ERROR)
-  }
-  return path
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path
 }
 
 async function apiFetch(path, options = {}, token) {
@@ -21,16 +16,9 @@ async function apiFetch(path, options = {}, token) {
     ...(options.headers || {}),
   }
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
+  if (token) headers.Authorization = `Bearer ${token}`
 
-  let response
-  try {
-    response = await fetch(apiUrl(path), { ...options, headers, mode: 'cors' })
-  } catch (error) {
-    throw new Error(error?.message === API_CONFIG_ERROR ? API_CONFIG_ERROR : 'Cannot reach the backend. Check CORS, backend URL, and backend health.')
-  }
+  const response = await fetch(apiUrl(path), { ...options, headers })
   const data = await response.json().catch(() => ({}))
 
   if (!response.ok) {
@@ -41,33 +29,22 @@ async function apiFetch(path, options = {}, token) {
 }
 
 function Logo({ small = false }) {
-  const [svgFailed, setSvgFailed] = useState(false)
-  const [pngFailed, setPngFailed] = useState(false)
-  const className = small ? 'brand-logo-small' : 'brand-logo-large'
-
-  if (!svgFailed) {
-    return (
-      <img
-        src="/logo.svg"
-        alt="Martinsdirect logo"
-        className={className}
-        onError={() => setSvgFailed(true)}
-      />
-    )
+  const [failed, setFailed] = useState(false)
+  if (failed) {
+    return <div className={small ? 'logo-fallback logo-fallback-small' : 'logo-fallback'}>MD</div>
   }
 
-  if (!pngFailed) {
-    return (
-      <img
-        src="/logo.png"
-        alt="Martinsdirect logo"
-        className={className}
-        onError={() => setPngFailed(true)}
-      />
-    )
-  }
-
-  return <div className={small ? 'logo-fallback logo-fallback-small' : 'logo-fallback'}>MD</div>
+  return (
+    <img
+      src="/logo.svg"
+      alt="Martinsdirect logo"
+      className={small ? 'brand-logo-small' : 'brand-logo-large'}
+      onError={(e) => {
+        if (e.currentTarget.src.endsWith('/logo.png')) setFailed(true)
+        else e.currentTarget.src = '/logo.png'
+      }}
+    />
+  )
 }
 
 function LoginScreen({ onLogin, onOpenReset }) {
@@ -78,32 +55,32 @@ function LoginScreen({ onLogin, onOpenReset }) {
   const [submitting, setSubmitting] = useState(false)
 
   const handleSubmit = async (event) => {
-  event.preventDefault()
-  setSubmitting(true)
-  setError('')
+    event.preventDefault()
+    setSubmitting(true)
+    setError('')
 
-  try {
-    const data = await apiFetch('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    })
+    try {
+      const data = await apiFetch('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      })
 
-    const safeAuth = {
-      token: data?.token || data?.access_token,
-      user: data?.user,
+      const safeAuth = {
+        token: data?.token || data?.access_token,
+        user: data?.user,
+      }
+
+      if (!safeAuth.token || !safeAuth.user) {
+        throw new Error('Invalid login response from server')
+      }
+
+      onLogin(safeAuth)
+    } catch (err) {
+      setError(err.message || 'Login failed')
+    } finally {
+      setSubmitting(false)
     }
-
-    if (!safeAuth.token || !safeAuth.user) {
-      throw new Error('Invalid login response from server')
-    }
-
-    onLogin(safeAuth)
-  } catch (err) {
-    setError(err.message || 'Login failed')
-  } finally {
-    setSubmitting(false)
   }
-}
 
   return (
     <div className="auth-shell">
@@ -116,7 +93,7 @@ function LoginScreen({ onLogin, onOpenReset }) {
           </div>
           <div>
             <p className="auth-eyebrow">Martinsdirect Management Platform</p>
-            <h1>Sign in to manage users, payments, reports, and statements.</h1>
+            <h1>Sign in to manage users, payments, members, reports, and statements.</h1>
             <p className="auth-copy">
               Admin manages the full platform. Franchisees can upload bank PDF, CSV, and Excel statements, allocate payments, and edit transactions.
             </p>
@@ -232,7 +209,7 @@ function StatCard({ label, value }) {
 function OverviewPanel({ user, reports }) {
   return (
     <div className="content-grid">
-      <StatCard label="Signed in role" value={user.role} />
+      <StatCard label="Signed in role" value={user?.role || '-'} />
       <StatCard label="Users" value={reports?.totals?.users ?? '-'} />
       <StatCard label="Payments" value={reports?.totals?.payments ?? '-'} />
       <div className="panel full-span">
@@ -255,17 +232,12 @@ function PaymentsPanel({ token, role }) {
   const [franchiseName, setFranchiseName] = useState('')
   const [bankName, setBankName] = useState('')
   const [uploadMode, setUploadMode] = useState('file')
-  const [importOptions, setImportOptions] = useState({ supported_banks: [], supported_extensions: [] })
   const canEdit = role === 'admin' || role === 'franchisee'
 
   const loadPayments = async () => {
     try {
-      const [paymentData, optionData] = await Promise.all([
-        apiFetch('/api/payments', {}, token),
-        apiFetch('/api/payments/import-options', {}, token).catch(() => ({ supported_banks: [], supported_extensions: [] })),
-      ])
+      const paymentData = await apiFetch('/api/payments', {}, token)
       setPayments(paymentData)
-      setImportOptions(optionData)
       setError('')
     } catch (err) {
       setError(err.message)
@@ -285,10 +257,7 @@ function PaymentsPanel({ token, role }) {
         formData.append('statement', statementFile)
         if (franchiseName.trim()) formData.append('franchise_name', franchiseName.trim())
         if (bankName.trim()) formData.append('bank_name', bankName.trim())
-        await apiFetch('/api/payments/upload-statement', {
-          method: 'POST',
-          body: formData,
-        }, token)
+        await apiFetch('/api/payments/upload-statement', { method: 'POST', body: formData }, token)
         setStatementFile(null)
       } else {
         const rows = JSON.parse(uploadRows)
@@ -323,38 +292,42 @@ function PaymentsPanel({ token, role }) {
     loadPayments()
   }
 
-  if (!canEdit) {
-    return <div className="panel"><h2>Payments</h2><p>Users can view the dashboard but cannot manage payment records.</p></div>
-  }
+  if (!canEdit) return <div className="panel"><h2>Payments</h2><p>Users can view the dashboard but cannot manage payment records.</p></div>
 
   return (
     <div className="stack-lg">
       <div className="panel">
-        <div className="panel-header"><div><h2>Upload bank statement</h2><p>Upload a text-based bank statement PDF for extraction, or switch to manual JSON import.</p></div></div>
+        <div className="panel-header"><div><h2>Upload bank statement</h2><p>Upload a text-based bank statement PDF or switch to manual JSON import.</p></div></div>
         <div className="badge-row">
-          <button className={`btn ${uploadMode === 'pdf' ? 'btn-primary' : 'btn-secondary'}`} type="button" onClick={() => setUploadMode('pdf')}>PDF upload</button>
+          <button className={`btn ${uploadMode === 'file' ? 'btn-primary' : 'btn-secondary'}`} type="button" onClick={() => setUploadMode('file')}>Statement upload</button>
           <button className={`btn ${uploadMode === 'json' ? 'btn-primary' : 'btn-secondary'}`} type="button" onClick={() => setUploadMode('json')}>Manual JSON</button>
         </div>
-        {uploadMode === 'pdf' ? (
+        {uploadMode === 'file' ? (
           <>
-            <div className="form-group">
-              <label>Statement PDF</label>
-              <input type="file" accept="application/pdf,.pdf" onChange={(e) => setStatementFile(e.target.files?.[0] || null)} />
+            <div className="grid-two">
+              <div className="form-group">
+                <label>Statement file</label>
+                <input type="file" accept=".pdf,.csv,.xlsx,.xls" onChange={(e) => setStatementFile(e.target.files?.[0] || null)} />
+              </div>
+              <div className="form-group">
+                <label>Bank name (optional)</label>
+                <input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="Nedbank / ABSA / FNB" />
+              </div>
             </div>
             <div className="form-group">
               <label>Franchise name (optional)</label>
               <input value={franchiseName} onChange={(e) => setFranchiseName(e.target.value)} placeholder="Pretoria West" />
             </div>
-            <p className="helper-text">Best results come from text-based bank statement PDFs with date, description, and amount columns.</p>
           </>
         ) : (
           <div className="form-group"><label>Transactions JSON</label><textarea className="text-area" value={uploadRows} onChange={(e) => setUploadRows(e.target.value)} /></div>
         )}
         <button className="btn btn-primary" type="button" onClick={uploadStatement}>Import transactions</button>
+        {error ? <div className="auth-error top-gap">{error}</div> : null}
       </div>
+
       <div className="panel">
         <div className="panel-header"><div><h2>Transactions</h2><p>Allocate or edit imported transactions.</p></div></div>
-        {error ? <div className="auth-error">{error}</div> : null}
         <div className="table-wrap">
           <table className="data-table">
             <thead><tr><th>Payer</th><th>Reference</th><th>Amount</th><th>Status</th><th>Allocated</th><th>Actions</th></tr></thead>
@@ -372,6 +345,7 @@ function PaymentsPanel({ token, role }) {
                   </td>
                 </tr>
               ))}
+              {!payments.length ? <tr><td colSpan="6" className="empty-row">No payments loaded yet.</td></tr> : null}
             </tbody>
           </table>
         </div>
@@ -427,9 +401,7 @@ function UserManagementPanel({ token, role }) {
     loadUsers()
   }
 
-  if (role !== 'admin') {
-    return <div className="panel"><h2>User management</h2><p>Only admin can manage users and reset passwords.</p></div>
-  }
+  if (role !== 'admin') return <div className="panel"><h2>User management</h2><p>Only admin can manage users and reset passwords.</p></div>
 
   return (
     <div className="employees-grid">
@@ -442,7 +414,7 @@ function UserManagementPanel({ token, role }) {
           <div className="form-group"><label>Role</label><select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}><option value="user">User</option><option value="franchisee">Franchisee</option><option value="admin">Admin</option></select></div>
         </div>
         <button className="btn btn-primary" type="button" onClick={createUser}>Create user</button>
-        {error ? <div className="auth-error">{error}</div> : null}
+        {error ? <div className="auth-error top-gap">{error}</div> : null}
       </div>
       <div className="panel">
         <div className="panel-header"><div><h2>Existing users</h2><p>Admin-only account management.</p></div></div>
@@ -459,6 +431,7 @@ function UserManagementPanel({ token, role }) {
                   </td>
                 </tr>
               ))}
+              {!users.length ? <tr><td colSpan="5" className="empty-row">No users available.</td></tr> : null}
             </tbody>
           </table>
         </div>
@@ -472,9 +445,7 @@ function ReportsPanel({ token, role, reports, onRefresh }) {
     if (role === 'admin') onRefresh()
   }, [token, role])
 
-  if (role !== 'admin') {
-    return <div className="panel"><h2>Reports</h2><p>Only admin can view summary reports.</p></div>
-  }
+  if (role !== 'admin') return <div className="panel"><h2>Reports</h2><p>Only admin can view summary reports.</p></div>
 
   return (
     <div className="content-grid">
@@ -492,18 +463,114 @@ function ReportsPanel({ token, role, reports, onRefresh }) {
   )
 }
 
+function MembersPanel({ data, activeSubtab, setActiveSubtab }) {
+  const categories = [
+    { key: 'insMembers', label: 'Ins Members' },
+    { key: 'membershipClub', label: 'Membership Club' },
+    { key: 'society', label: 'Society' },
+  ]
+
+  const rows = data[activeSubtab] || []
+
+  return (
+    <div className="stack-lg">
+      <div className="panel">
+        <div className="panel-header"><div><h2>Members</h2><p>View imported member records by section.</p></div></div>
+        <div className="subtab-row">
+          {categories.map((category) => (
+            <button
+              key={category.key}
+              type="button"
+              className={`subtab-btn ${activeSubtab === category.key ? 'subtab-btn-active' : ''}`}
+              onClick={() => setActiveSubtab(category.key)}
+            >
+              {category.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-header"><div><h2>{categories.find((c) => c.key === activeSubtab)?.label}</h2><p>{rows.length} record{rows.length === 1 ? '' : 's'} loaded.</p></div></div>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Member ID</th>
+                <th>Name</th>
+                <th>Surname</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length ? rows.map((row, index) => (
+                <tr key={`${row.member_id || row.email || 'member'}-${index}`}>
+                  <td>{row.member_id || '-'}</td>
+                  <td>{row.name || '-'}</td>
+                  <td>{row.surname || '-'}</td>
+                  <td>{row.email || '-'}</td>
+                  <td>{row.phone || '-'}</td>
+                  <td>{row.status || '-'}</td>
+                </tr>
+              )) : <tr><td colSpan="6" className="empty-row">No records loaded yet for this subtab.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function DashboardShell({ auth, onLogout }) {
   const user = auth?.user || {}
   const token = auth?.token || ''
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [active, setActive] = useState('overview')
+  const [activeMemberSubtab, setActiveMemberSubtab] = useState('insMembers')
   const [reports, setReports] = useState(null)
+  const [memberData, setMemberData] = useState(() => {
+    try {
+      const stored = localStorage.getItem(MEMBERS_KEY)
+      return stored ? JSON.parse(stored) : { insMembers: [], membershipClub: [], society: [] }
+    } catch {
+      return { insMembers: [], membershipClub: [], society: [] }
+    }
+  })
 
   const navItems = useMemo(() => {
-    const items = [{ key: 'overview', label: 'Overview' }, { key: 'payments', label: 'Payments' }]
-if (user?.role === 'admin') items.push({ key: 'users', label: 'User Management' }, { key: 'reports', label: 'Reports' })
+    const items = [
+      { key: 'overview', label: 'Overview' },
+      { key: 'payments', label: 'Payments' },
+      { key: 'members', label: 'Members' },
+    ]
+    if (user?.role === 'admin') items.push({ key: 'users', label: 'User Management' }, { key: 'reports', label: 'Reports' })
     return items
   }, [user?.role])
+
+  useEffect(() => {
+    localStorage.setItem(MEMBERS_KEY, JSON.stringify(memberData))
+  }, [memberData])
+
+  useEffect(() => {
+    if (active !== 'members') return
+    const loadMembers = async () => {
+      try {
+        const data = await apiFetch('/api/members', {}, token)
+        if (data && typeof data === 'object') {
+          setMemberData({
+            insMembers: data.insMembers || data.ins_members || [],
+            membershipClub: data.membershipClub || data.membership_club || [],
+            society: data.society || [],
+          })
+        }
+      } catch {
+        // keep local fallback data if endpoint is unavailable
+      }
+    }
+    loadMembers()
+  }, [active, token])
 
   const refreshReports = async () => {
     try {
@@ -520,38 +587,64 @@ if (user?.role === 'admin') items.push({ key: 'users', label: 'User Management' 
 
   const renderPanel = () => {
     if (active === 'payments') return <PaymentsPanel token={token} role={user?.role} />
+    if (active === 'members') return <MembersPanel data={memberData} activeSubtab={activeMemberSubtab} setActiveSubtab={setActiveMemberSubtab} />
     if (active === 'users') return <UserManagementPanel token={token} role={user?.role} />
     if (active === 'reports') return <ReportsPanel token={token} role={user?.role} reports={reports} onRefresh={refreshReports} />
     return <OverviewPanel user={user} reports={reports} />
   }
 
   return (
-    <div className="dashboard-shell dashboard-mobile-shell">
+    <div className="dashboard-shell">
       <button className="mobile-menu-btn" type="button" onClick={() => setSidebarOpen(true)}>Menu</button>
       {sidebarOpen ? <div className="mobile-overlay" onClick={() => setSidebarOpen(false)} /> : null}
+
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-brand">
           <Logo small />
-          <div><strong>Martinsdirect</strong><p>Operations Portal</p></div>
+          <div className="sidebar-brand-text"><strong>Martinsdirect</strong><p>Operations Portal</p></div>
         </div>
+
         <div className="sidebar-user">
           <div className="sidebar-brand-mark">MD</div>
-          <div><strong>{user?.name || 'User'}</strong><p>{user?.email || ''}</p><span className="pill">{user?.role || 'unknown'}</span></div>
+          <div>
+            <strong>{user?.name || 'User'}</strong>
+            <p>{user?.email || ''}</p>
+            <span className="pill">{user?.role || 'unknown'}</span>
+          </div>
         </div>
+
         <nav className="sidebar-nav">
           {navItems.map((item) => (
-            <button key={item.key} className={`nav-btn ${active === item.key ? 'nav-btn-active' : ''}`} type="button" onClick={() => { setActive(item.key); setSidebarOpen(false) }}>
+            <button
+              key={item.key}
+              className={`nav-btn ${active === item.key ? 'nav-btn-active' : ''}`}
+              type="button"
+              onClick={() => { setActive(item.key); setSidebarOpen(false) }}
+            >
               {item.label}
             </button>
           ))}
+
+          {active === 'members' ? (
+            <div className="sidebar-subnav">
+              <button className={`subnav-btn ${activeMemberSubtab === 'insMembers' ? 'subnav-btn-active' : ''}`} type="button" onClick={() => setActiveMemberSubtab('insMembers')}>Ins Members</button>
+              <button className={`subnav-btn ${activeMemberSubtab === 'membershipClub' ? 'subnav-btn-active' : ''}`} type="button" onClick={() => setActiveMemberSubtab('membershipClub')}>Membership Club</button>
+              <button className={`subnav-btn ${activeMemberSubtab === 'society' ? 'subnav-btn-active' : ''}`} type="button" onClick={() => setActiveMemberSubtab('society')}>Society</button>
+            </div>
+          ) : null}
         </nav>
+
         <div className="sidebar-footer">
-          <button className="btn btn-secondary" type="button" onClick={onLogout}>Log out</button>
+          <button className="btn btn-secondary full-width" type="button" onClick={onLogout}>Log out</button>
         </div>
       </aside>
+
       <main className="main-content">
         <div className="topbar">
-          <div className="topbar-title"><h1>{navItems.find((item) => item.key === active)?.label || 'Dashboard'}</h1><p>Admin and franchisee rules are active in both UI and backend routes.</p></div>
+          <div className="topbar-title-wrap">
+            <h1>{navItems.find((item) => item.key === active)?.label || 'Dashboard'}</h1>
+            <p>{active === 'members' ? 'Members imported into Ins Members, Membership Club, and Society will appear here.' : 'Admin and franchisee rules are active in both UI and backend routes.'}</p>
+          </div>
           <div className="topbar-right"><Logo small /></div>
         </div>
         {renderPanel()}
@@ -562,14 +655,14 @@ if (user?.role === 'admin') items.push({ key: 'users', label: 'User Management' 
 
 export default function App() {
   const [auth, setAuth] = useState(() => {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    const parsed = stored ? JSON.parse(stored) : null
-    return parsed?.token && parsed?.user ? parsed : null
-  } catch {
-    return null
-  }
-})
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      const parsed = stored ? JSON.parse(stored) : null
+      return parsed?.token && parsed?.user ? parsed : null
+    } catch {
+      return null
+    }
+  })
   const [resetOpen, setResetOpen] = useState(false)
   const [resetToken, setResetToken] = useState('')
 
