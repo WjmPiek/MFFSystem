@@ -61,3 +61,25 @@ The payments upload flow now supports real PDF bank statement imports.
 ### Notes
 - Best results come from text-based bank statement PDFs with visible date, description, and amount columns.
 - Image-only scanned PDFs are not supported in this build because OCR was intentionally not added.
+
+
+## Bank import support
+
+The payments import flow now supports these uploaded statement types:
+- PDF (text-based statements)
+- CSV
+- Excel `.xlsx`
+- Excel `.xls`
+- JSON API fallback
+
+Supported bank profiles and heuristics:
+- Nedbank
+- ABSA
+- FNB
+- Standard Bank
+- Capitec
+
+Notes:
+- Bank selection is optional in the frontend; auto-detect is attempted first.
+- CSV and Excel parsing use column mapping heuristics for common exported statement layouts.
+- PDF parsing still requires text-based PDFs, not scanned image-only statements.

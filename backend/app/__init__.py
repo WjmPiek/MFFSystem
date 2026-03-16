@@ -16,29 +16,27 @@ def _normalize_database_url(database_url):
 
 
 def _ensure_default_admin(app):
-    admin_email = os.getenv('ADMIN_EMAIL', 'wjm@martinsdirect.com').strip().lower()
-    admin_password = os.getenv('ADMIN_PASSWORD', 'Renette7')
-    admin_name = os.getenv('ADMIN_NAME', 'Wjm').strip() or 'Wjm'
-    admin_role = normalize_role(os.getenv('ADMIN_ROLE', 'admin'))
+    admin_email = os.getenv("ADMIN_EMAIL", "wjm@martinsdirect.com").strip().lower()
+    admin_password = os.getenv("ADMIN_PASSWORD", "Renette7")
+    admin_name = os.getenv("ADMIN_NAME", "Wjm").strip() or "Wjm"
+    admin_role = os.getenv("ADMIN_ROLE", "admin").strip().lower() or "admin"
 
     with app.app_context():
         db.create_all()
+
         existing_user = User.query.filter(db.func.lower(User.email) == admin_email).first()
+
         if existing_user is None:
             user = User(name=admin_name, email=admin_email, role=admin_role, is_active=True)
             user.set_password(admin_password)
             db.session.add(user)
-            db.session.commit()
         else:
-            changed = False
-            if existing_user.role != admin_role:
-                existing_user.role = admin_role
-                changed = True
-            if not existing_user.is_active:
-                existing_user.is_active = True
-                changed = True
-            if changed:
-                db.session.commit()
+            existing_user.name = admin_name
+            existing_user.role = admin_role
+            existing_user.is_active = True
+            existing_user.set_password(admin_password)
+
+        db.session.commit()
 
 
 def create_app():

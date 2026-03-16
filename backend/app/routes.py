@@ -205,6 +205,20 @@ def list_payments():
     return jsonify([payment.to_dict() for payment in payments]), 200
 
 
+@api.get('/payments/import-options')
+@roles_required('admin', 'franchisee')
+def payment_import_options():
+    return jsonify({
+        'supported_banks': ['nedbank', 'absa', 'fnb', 'standard_bank', 'capitec'],
+        'supported_extensions': ['.pdf', '.csv', '.xlsx', '.xls', '.json'],
+        'notes': [
+            'PDF import works for text-based statements.',
+            'CSV and Excel import support common export layouts from Nedbank, ABSA, FNB, Standard Bank, and Capitec.',
+            'Bank selection is optional but improves parsing accuracy when the statement layout is ambiguous.',
+        ],
+    }), 200
+
+
 @api.post('/payments/upload-statement')
 @roles_required('admin', 'franchisee')
 def upload_statement():
@@ -214,21 +228,20 @@ def upload_statement():
     if request.files:
         statement_file = request.files.get('statement') or next(iter(request.files.values()), None)
         if not statement_file or not statement_file.filename:
-            return jsonify({'error': 'A bank statement PDF file is required.'}), 400
-        if not statement_file.filename.lower().endswith('.pdf'):
-            return jsonify({'error': 'Only PDF bank statements are supported.'}), 400
+            return jsonify({'error': 'A statement file is required.'}), 400
 
-        filename = secure_filename(statement_file.filename) or 'bank-statement.pdf'
+        filename = secure_filename(statement_file.filename) or 'bank-statement'
         franchise_name = (request.form.get('franchise_name') or '').strip() or None
+        bank_name = (request.form.get('bank_name') or '').strip() or None
 
         try:
-            rows = parser.parse_pdf(statement_file.read(), franchise_name=franchise_name)
+            rows = parser.parse_file(filename, statement_file.read(), franchise_name=franchise_name, bank_name=bank_name)
         except StatementParseError as exc:
             return jsonify({'error': str(exc)}), 400
 
     else:
         data = _json()
-        filename = (data.get('filename') or 'uploaded-statement.pdf').strip()
+        filename = (data.get('filename') or 'uploaded-statement.json').strip()
         rows = data.get('transactions') or []
 
     for row in rows:

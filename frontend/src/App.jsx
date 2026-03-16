@@ -54,21 +54,32 @@ function LoginScreen({ onLogin, onOpenReset }) {
   const [submitting, setSubmitting] = useState(false)
 
   const handleSubmit = async (event) => {
-    event.preventDefault()
-    setSubmitting(true)
-    setError('')
-    try {
-      const data = await apiFetch('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      })
-      onLogin(data)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setSubmitting(false)
+  event.preventDefault()
+  setSubmitting(true)
+  setError('')
+
+  try {
+    const data = await apiFetch('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    })
+
+    const safeAuth = {
+      token: data?.token || data?.access_token,
+      user: data?.user,
     }
+
+    if (!safeAuth.token || !safeAuth.user) {
+      throw new Error('Invalid login response from server')
+    }
+
+    onLogin(safeAuth)
+  } catch (err) {
+    setError(err.message || 'Login failed')
+  } finally {
+    setSubmitting(false)
   }
+}
 
   return (
     <div className="auth-shell">
@@ -83,7 +94,7 @@ function LoginScreen({ onLogin, onOpenReset }) {
             <p className="auth-eyebrow">Martinsdirect Management Platform</p>
             <h1>Sign in to manage users, payments, reports, and statements.</h1>
             <p className="auth-copy">
-              Admin manages the full platform. Franchisees can upload bank PDFs, allocate payments, and edit transactions.
+              Admin manages the full platform. Franchisees can upload bank PDF, CSV, and Excel statements, allocate payments, and edit transactions.
             </p>
           </div>
           <div className="auth-feature-list">
@@ -204,7 +215,7 @@ function OverviewPanel({ user, reports }) {
         <div className="panel-header"><div><h2>Role access</h2><p>Platform permissions are enforced on the backend and reflected in the UI.</p></div></div>
         <div className="badge-row">
           <span className="pill">Admin: full control</span>
-          <span className="pill">Franchisee: upload bank PDFs, allocate payments, edit transactions</span>
+          <span className="pill">Franchisee: upload bank PDF, CSV, and Excel statements, allocate payments, edit transactions</span>
           <span className="pill">User: read only</span>
         </div>
       </div>
@@ -218,13 +229,19 @@ function PaymentsPanel({ token, role }) {
   const [uploadRows, setUploadRows] = useState('[{"payer_name":"Delta Retail","reference":"DELTA-1004","amount":1499.99,"franchise_name":"Pretoria West"}]')
   const [statementFile, setStatementFile] = useState(null)
   const [franchiseName, setFranchiseName] = useState('')
-  const [uploadMode, setUploadMode] = useState('pdf')
+  const [bankName, setBankName] = useState('')
+  const [uploadMode, setUploadMode] = useState('file')
+  const [importOptions, setImportOptions] = useState({ supported_banks: [], supported_extensions: [] })
   const canEdit = role === 'admin' || role === 'franchisee'
 
   const loadPayments = async () => {
     try {
-      const data = await apiFetch('/api/payments', {}, token)
-      setPayments(data)
+      const [paymentData, optionData] = await Promise.all([
+        apiFetch('/api/payments', {}, token),
+        apiFetch('/api/payments/import-options', {}, token).catch(() => ({ supported_banks: [], supported_extensions: [] })),
+      ])
+      setPayments(paymentData)
+      setImportOptions(optionData)
       setError('')
     } catch (err) {
       setError(err.message)
@@ -238,11 +255,12 @@ function PaymentsPanel({ token, role }) {
   const uploadStatement = async () => {
     try {
       setError('')
-      if (uploadMode === 'pdf') {
-        if (!statementFile) throw new Error('Choose a bank statement PDF first.')
+      if (uploadMode === 'file') {
+        if (!statementFile) throw new Error('Choose a bank statement file first.')
         const formData = new FormData()
         formData.append('statement', statementFile)
         if (franchiseName.trim()) formData.append('franchise_name', franchiseName.trim())
+        if (bankName.trim()) formData.append('bank_name', bankName.trim())
         await apiFetch('/api/payments/upload-statement', {
           method: 'POST',
           body: formData,
@@ -451,16 +469,17 @@ function ReportsPanel({ token, role, reports, onRefresh }) {
 }
 
 function DashboardShell({ auth, onLogout }) {
-  const { user, token } = auth
+  const user = auth?.user || {}
+  const token = auth?.token || ''
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [active, setActive] = useState('overview')
   const [reports, setReports] = useState(null)
 
   const navItems = useMemo(() => {
     const items = [{ key: 'overview', label: 'Overview' }, { key: 'payments', label: 'Payments' }]
-    if (user.role === 'admin') items.push({ key: 'users', label: 'User Management' }, { key: 'reports', label: 'Reports' })
+if (user?.role === 'admin') items.push({ key: 'users', label: 'User Management' }, { key: 'reports', label: 'Reports' })
     return items
-  }, [user.role])
+  }, [user?.role])
 
   const refreshReports = async () => {
     try {
@@ -476,9 +495,9 @@ function DashboardShell({ auth, onLogout }) {
   }, [token])
 
   const renderPanel = () => {
-    if (active === 'payments') return <PaymentsPanel token={token} role={user.role} />
-    if (active === 'users') return <UserManagementPanel token={token} role={user.role} />
-    if (active === 'reports') return <ReportsPanel token={token} role={user.role} reports={reports} onRefresh={refreshReports} />
+    if (active === 'payments') return <PaymentsPanel token={token} role={user?.role} />
+    if (active === 'users') return <UserManagementPanel token={token} role={user?.role} />
+    if (active === 'reports') return <ReportsPanel token={token} role={user?.role} reports={reports} onRefresh={refreshReports} />
     return <OverviewPanel user={user} reports={reports} />
   }
 
@@ -493,7 +512,7 @@ function DashboardShell({ auth, onLogout }) {
         </div>
         <div className="sidebar-user">
           <div className="sidebar-brand-mark">MD</div>
-          <div><strong>{user.name}</strong><p>{user.email}</p><span className="pill">{user.role}</span></div>
+          <div><strong>{user?.name || 'User'}</strong><p>{user?.email || ''}</p><span className="pill">{user?.role || 'unknown'}</span></div>
         </div>
         <nav className="sidebar-nav">
           {navItems.map((item) => (
@@ -519,9 +538,14 @@ function DashboardShell({ auth, onLogout }) {
 
 export default function App() {
   const [auth, setAuth] = useState(() => {
+  try {
     const stored = localStorage.getItem(STORAGE_KEY)
-    return stored ? JSON.parse(stored) : null
-  })
+    const parsed = stored ? JSON.parse(stored) : null
+    return parsed?.token && parsed?.user ? parsed : null
+  } catch {
+    return null
+  }
+})
   const [resetOpen, setResetOpen] = useState(false)
   const [resetToken, setResetToken] = useState('')
 
