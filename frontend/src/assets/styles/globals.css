@@ -185,6 +185,48 @@ img {
   margin-top: auto;
 }
 
+.sidebar-nav-group {
+  display: grid;
+  gap: 6px;
+}
+
+.topbar-kicker {
+  color: var(--primary);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.document-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.document-card {
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 18px;
+  background: var(--panel-alt);
+  display: grid;
+  gap: 10px;
+}
+
+.document-card h3,
+.document-card p {
+  margin: 0;
+}
+
+.doc-link {
+  color: var(--primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.doc-link:hover {
+  text-decoration: underline;
+}
+
+
 .full-width {
   width: 100%;
 }
@@ -198,9 +240,9 @@ img {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 20px;
   border-radius: 28px;
-  padding: 14px 18px;
+  padding: 22px 24px;
   margin-bottom: 16px;
 }
 
@@ -209,13 +251,16 @@ img {
 }
 
 .topbar h1 {
-  font-size: clamp(2rem, 3vw, 3.1rem);
-  line-height: 1;
-  margin-bottom: 8px;
+  font-size: clamp(2rem, 3vw, 3rem);
+  line-height: 1.05;
+  margin: 0 0 8px;
 }
 
 .topbar-right {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .content-grid {
