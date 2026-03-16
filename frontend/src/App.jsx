@@ -5,35 +5,6 @@ const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 const STORAGE_KEY = 'martinsdirect_auth'
 const MEMBERS_KEY = 'martinsdirect_members_data'
 
-const SECTION_CONFIG = {
-  members: {
-    label: 'Members',
-    subtabs: [
-      { key: 'insMembers', label: 'Ins Members' },
-      { key: 'membershipClub', label: 'Membership Club' },
-      { key: 'society', label: 'Society' },
-    ],
-  },
-  services: {
-    label: 'Services',
-    subtabs: [
-      { key: 'funerals', label: 'Funerals' },
-      { key: 'cremations', label: 'Cremations' },
-      { key: 'repatriations', label: 'Repatriations' },
-    ],
-  },
-  payments: {
-    label: 'Payments',
-    subtabs: [
-      { key: 'insReceipt', label: 'Ins Receipt' },
-      { key: 'clubReceipt', label: 'Club Receipt' },
-      { key: 'societyReceipt', label: 'Society Receipt' },
-      { key: 'cashSale', label: 'Cash Sale' },
-      { key: 'funeralReceipt', label: 'Funeral Receipt' },
-    ],
-  },
-}
-
 function apiUrl(path) {
   return API_BASE_URL ? `${API_BASE_URL}${path}` : path
 }
@@ -58,21 +29,14 @@ async function apiFetch(path, options = {}, token) {
 }
 
 function Logo({ small = false }) {
-  const [failed, setFailed] = useState(false)
-  if (failed) {
-    return <div className={small ? 'logo-fallback logo-fallback-small' : 'logo-fallback'}>MD</div>
-  }
-
   return (
-    <img
-      src="/logo.svg"
-      alt="Martinsdirect logo"
-      className={small ? 'brand-logo-small' : 'brand-logo-large'}
-      onError={(e) => {
-        if (e.currentTarget.src.endsWith('/logo.png')) setFailed(true)
-        else e.currentTarget.src = '/logo.png'
-      }}
-    />
+    <div className={small ? 'brand-lockup brand-lockup-small' : 'brand-lockup'} aria-label="Martinsdirect">
+      <div className="brand-mark">MD</div>
+      <div className="brand-copy">
+        <strong>Martinsdirect</strong>
+        <span>Operations Portal</span>
+      </div>
+    </div>
   )
 }
 
@@ -253,7 +217,7 @@ function OverviewPanel({ user, reports }) {
   )
 }
 
-function PaymentsPanel({ token, role, activeReceiptSubtab }) {
+function PaymentsPanel({ token, role }) {
   const [payments, setPayments] = useState([])
   const [error, setError] = useState('')
   const [uploadRows, setUploadRows] = useState('[{"payer_name":"Delta Retail","reference":"DELTA-1004","amount":1499.99,"franchise_name":"Pretoria West"}]')
@@ -262,41 +226,6 @@ function PaymentsPanel({ token, role, activeReceiptSubtab }) {
   const [bankName, setBankName] = useState('')
   const [uploadMode, setUploadMode] = useState('file')
   const canEdit = role === 'admin' || role === 'franchisee'
-
-  const receiptMeta = {
-    insReceipt: {
-      title: 'Insurance receipts',
-      description: 'Insurance-related receipts and imported payment rows are shown here.',
-      allocationHint: 'Insurance Accounts',
-      documentType: 'Insurance receipt',
-    },
-    clubReceipt: {
-      title: 'Club receipts',
-      description: 'Use this tab for club-related receipts and membership payment allocations.',
-      allocationHint: 'Club Accounts',
-      documentType: 'Club receipt',
-    },
-    societyReceipt: {
-      title: 'Society receipts',
-      description: 'Society receipts are grouped here for review and allocation.',
-      allocationHint: 'Society Accounts',
-      documentType: 'Society receipt',
-    },
-    cashSale: {
-      title: 'Cash sales',
-      description: 'Track ad-hoc cash sale records and matching payment entries.',
-      allocationHint: 'Cash Sales',
-      documentType: 'Cash sale',
-    },
-    funeralReceipt: {
-      title: 'Funeral receipts',
-      description: 'Funeral payment receipts and supporting transaction records appear here.',
-      allocationHint: 'Funeral Services',
-      documentType: 'Funeral receipt',
-    },
-  }
-
-  const activeMeta = receiptMeta[activeReceiptSubtab] || receiptMeta.insReceipt
 
   const loadPayments = async () => {
     try {
@@ -337,7 +266,7 @@ function PaymentsPanel({ token, role, activeReceiptSubtab }) {
   }
 
   const allocate = async (payment) => {
-    const allocatedTo = window.prompt('Allocate to', payment.allocated_to || activeMeta.allocationHint)
+    const allocatedTo = window.prompt('Allocate to', payment.allocated_to || 'Franchise Fee')
     if (!allocatedTo) return
     await apiFetch(`/api/payments/${payment.id}/allocate`, {
       method: 'PUT',
@@ -351,39 +280,15 @@ function PaymentsPanel({ token, role, activeReceiptSubtab }) {
     if (!reference) return
     await apiFetch(`/api/payments/${payment.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ reference, status: 'edited', notes: activeMeta.documentType }),
+      body: JSON.stringify({ reference, status: 'edited' }),
     }, token)
     loadPayments()
   }
-
-  const filteredPayments = payments.filter((payment, index) => index % 5 === {
-    insReceipt: 0,
-    clubReceipt: 1,
-    societyReceipt: 2,
-    cashSale: 3,
-    funeralReceipt: 4,
-  }[activeReceiptSubtab])
-
-  const documentRows = filteredPayments.map((payment) => ({
-    name: payment.statement_filename || payment.reference,
-    reference: payment.reference,
-    linkedTo: payment.allocated_to || activeMeta.documentType,
-    amount: payment.amount,
-    payer: payment.payer_name,
-  }))
 
   if (!canEdit) return <div className="panel"><h2>Payments</h2><p>Users can view the dashboard but cannot manage payment records.</p></div>
 
   return (
     <div className="stack-lg">
-      <div className="panel">
-        <div className="panel-header"><div><h2>{activeMeta.title}</h2><p>{activeMeta.description}</p></div></div>
-        <div className="badge-row">
-          <span className="pill">Linked document type: {activeMeta.documentType}</span>
-          <span className="pill">Suggested allocation: {activeMeta.allocationHint}</span>
-        </div>
-      </div>
-
       <div className="panel">
         <div className="panel-header"><div><h2>Upload bank statement</h2><p>Upload a text-based bank statement PDF or switch to manual JSON import.</p></div></div>
         <div className="badge-row">
@@ -415,32 +320,12 @@ function PaymentsPanel({ token, role, activeReceiptSubtab }) {
       </div>
 
       <div className="panel">
-        <div className="panel-header"><div><h2>Linked documents</h2><p>Documents in this payment tab stay aligned to the selected receipt category.</p></div></div>
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead><tr><th>Document</th><th>Reference</th><th>Payer</th><th>Linked to</th><th>Amount</th></tr></thead>
-            <tbody>
-              {documentRows.length ? documentRows.map((row, index) => (
-                <tr key={`${row.reference}-${index}`}>
-                  <td>{row.name}</td>
-                  <td>{row.reference}</td>
-                  <td>{row.payer}</td>
-                  <td>{row.linkedTo}</td>
-                  <td>R {Number(row.amount).toFixed(2)}</td>
-                </tr>
-              )) : <tr><td colSpan="5" className="empty-row">No linked documents loaded yet for this receipt type.</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="panel">
-        <div className="panel-header"><div><h2>Transactions</h2><p>Allocate or edit imported transactions for the selected receipt type.</p></div></div>
+        <div className="panel-header"><div><h2>Transactions</h2><p>Allocate or edit imported transactions.</p></div></div>
         <div className="table-wrap">
           <table className="data-table">
             <thead><tr><th>Payer</th><th>Reference</th><th>Amount</th><th>Status</th><th>Allocated</th><th>Actions</th></tr></thead>
             <tbody>
-              {filteredPayments.map((payment) => (
+              {payments.map((payment) => (
                 <tr key={payment.id}>
                   <td>{payment.payer_name}</td>
                   <td>{payment.reference}</td>
@@ -453,7 +338,7 @@ function PaymentsPanel({ token, role, activeReceiptSubtab }) {
                   </td>
                 </tr>
               ))}
-              {!filteredPayments.length ? <tr><td colSpan="6" className="empty-row">No payments loaded yet for this receipt type.</td></tr> : null}
+              {!payments.length ? <tr><td colSpan="6" className="empty-row">No payments loaded yet.</td></tr> : null}
             </tbody>
           </table>
         </div>
@@ -571,67 +456,19 @@ function ReportsPanel({ token, role, reports, onRefresh }) {
   )
 }
 
-function ServicesPanel({ activeSubtab }) {
-  const serviceContent = {
-    funerals: {
-      title: 'Funeral services',
-      description: 'Manage funeral service files, service packs, and linked operational documents.',
-      documents: [
-        { name: 'Funeral arrangement checklist', type: 'Service document', link: '#' },
-        { name: 'Client instruction form', type: 'Client document', link: '#' },
-        { name: 'Burial order summary', type: 'Operations document', link: '#' },
-      ],
-    },
-    cremations: {
-      title: 'Cremation services',
-      description: 'Keep cremation authorisations, scheduling forms, and supporting documents aligned here.',
-      documents: [
-        { name: 'Cremation authorisation', type: 'Service document', link: '#' },
-        { name: 'Ash collection register', type: 'Operations document', link: '#' },
-        { name: 'Cremation booking sheet', type: 'Scheduling document', link: '#' },
-      ],
-    },
-    repatriations: {
-      title: 'Repatriation services',
-      description: 'Track repatriation movement documents, permits, and linked client paperwork.',
-      documents: [
-        { name: 'Cross-border permit pack', type: 'Permit document', link: '#' },
-        { name: 'Transport instruction sheet', type: 'Operations document', link: '#' },
-        { name: 'Receiving branch confirmation', type: 'Branch document', link: '#' },
-      ],
-    },
-  }
-
-  const activeContent = serviceContent[activeSubtab] || serviceContent.funerals
-
-  return (
-    <div className="stack-lg">
-      <div className="panel">
-        <div className="panel-header"><div><h2>{activeContent.title}</h2><p>{activeContent.description}</p></div></div>
-        <div className="document-grid">
-          {activeContent.documents.map((document) => (
-            <div key={document.name} className="document-card">
-              <span className="pill">{document.type}</span>
-              <h3>{document.name}</h3>
-              <p>Keep this document linked to the {activeContent.title.toLowerCase()} workflow.</p>
-              <a href={document.link} className="doc-link">Open document slot</a>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function MembersPanel({ data, activeSubtab, setActiveSubtab }) {
-  const categories = SECTION_CONFIG.members.subtabs
+  const categories = [
+    { key: 'insMembers', label: 'Ins Members' },
+    { key: 'membershipClub', label: 'Membership Club' },
+    { key: 'society', label: 'Society' },
+  ]
+
   const rows = data[activeSubtab] || []
-  const templateHref = '/templates/members-import-template.xlsx'
 
   return (
     <div className="stack-lg">
       <div className="panel">
-        <div className="panel-header"><div><h2>Members</h2><p>View imported member records by section and keep the right document template linked to the right section.</p></div></div>
+        <div className="panel-header"><div><h2>Members</h2><p>View imported member records by section.</p></div></div>
         <div className="subtab-row">
           {categories.map((category) => (
             <button
@@ -643,23 +480,6 @@ function MembersPanel({ data, activeSubtab, setActiveSubtab }) {
               {category.label}
             </button>
           ))}
-        </div>
-      </div>
-
-      <div className="panel">
-        <div className="panel-header"><div><h2>Linked documents</h2><p>The import template remains linked to the selected member section.</p></div></div>
-        <div className="document-grid">
-          <div className="document-card">
-            <span className="pill">Import template</span>
-            <h3>{categories.find((c) => c.key === activeSubtab)?.label} workbook</h3>
-            <p>Use the workbook sheets for Ins Members, Membership Club, and Society so records load into the correct section.</p>
-            <a href={templateHref} className="doc-link">Open member template</a>
-          </div>
-          <div className="document-card">
-            <span className="pill">Record count</span>
-            <h3>{rows.length} linked member record{rows.length === 1 ? '' : 's'}</h3>
-            <p>These records are currently linked to the selected member tab and will remain separated from the other member sections.</p>
-          </div>
         </div>
       </div>
 
@@ -680,9 +500,9 @@ function MembersPanel({ data, activeSubtab, setActiveSubtab }) {
             <tbody>
               {rows.length ? rows.map((row, index) => (
                 <tr key={`${row.member_id || row.email || 'member'}-${index}`}>
-                  <td>{row.member_id || row.member_number || '-'}</td>
-                  <td>{row.name || row.first_name || row.full_name || '-'}</td>
-                  <td>{row.surname || row.last_name || '-'}</td>
+                  <td>{row.member_id || '-'}</td>
+                  <td>{row.name || '-'}</td>
+                  <td>{row.surname || '-'}</td>
                   <td>{row.email || '-'}</td>
                   <td>{row.phone || '-'}</td>
                   <td>{row.status || '-'}</td>
@@ -702,8 +522,6 @@ function DashboardShell({ auth, onLogout }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [active, setActive] = useState('overview')
   const [activeMemberSubtab, setActiveMemberSubtab] = useState('insMembers')
-  const [activeServiceSubtab, setActiveServiceSubtab] = useState('funerals')
-  const [activePaymentSubtab, setActivePaymentSubtab] = useState('insReceipt')
   const [reports, setReports] = useState(null)
   const [memberData, setMemberData] = useState(() => {
     try {
@@ -717,35 +535,12 @@ function DashboardShell({ auth, onLogout }) {
   const navItems = useMemo(() => {
     const items = [
       { key: 'overview', label: 'Overview' },
-      { key: 'members', label: 'Members' },
-      { key: 'services', label: 'Services' },
       { key: 'payments', label: 'Payments' },
+      { key: 'members', label: 'Members' },
     ]
     if (user?.role === 'admin') items.push({ key: 'users', label: 'User Management' }, { key: 'reports', label: 'Reports' })
     return items
   }, [user?.role])
-
-  const currentSubtabs = active === 'members'
-    ? SECTION_CONFIG.members.subtabs
-    : active === 'services'
-      ? SECTION_CONFIG.services.subtabs
-      : active === 'payments'
-        ? SECTION_CONFIG.payments.subtabs
-        : []
-
-  const activeSubtab = active === 'members'
-    ? activeMemberSubtab
-    : active === 'services'
-      ? activeServiceSubtab
-      : active === 'payments'
-        ? activePaymentSubtab
-        : ''
-
-  const setActiveSubtab = (key) => {
-    if (active === 'members') setActiveMemberSubtab(key)
-    if (active === 'services') setActiveServiceSubtab(key)
-    if (active === 'payments') setActivePaymentSubtab(key)
-  }
 
   useEffect(() => {
     localStorage.setItem(MEMBERS_KEY, JSON.stringify(memberData))
@@ -755,17 +550,14 @@ function DashboardShell({ auth, onLogout }) {
     if (active !== 'members') return
     const loadMembers = async () => {
       try {
-        const categories = [
-          { request: 'ins_members', local: 'insMembers' },
-          { request: 'membership_club', local: 'membershipClub' },
-          { request: 'society', local: 'society' },
-        ]
-        const responses = await Promise.all(categories.map((category) => apiFetch(`/api/members?category=${category.request}`, {}, token).catch(() => null)))
-        const next = { ...memberData }
-        responses.forEach((response, index) => {
-          if (response?.members) next[categories[index].local] = response.members
-        })
-        setMemberData(next)
+        const data = await apiFetch('/api/members', {}, token)
+        if (data && typeof data === 'object') {
+          setMemberData({
+            insMembers: data.insMembers || data.ins_members || [],
+            membershipClub: data.membershipClub || data.membership_club || [],
+            society: data.society || [],
+          })
+        }
       } catch {
         // keep local fallback data if endpoint is unavailable
       }
@@ -787,22 +579,12 @@ function DashboardShell({ auth, onLogout }) {
   }, [token])
 
   const renderPanel = () => {
+    if (active === 'payments') return <PaymentsPanel token={token} role={user?.role} />
     if (active === 'members') return <MembersPanel data={memberData} activeSubtab={activeMemberSubtab} setActiveSubtab={setActiveMemberSubtab} />
-    if (active === 'services') return <ServicesPanel activeSubtab={activeServiceSubtab} />
-    if (active === 'payments') return <PaymentsPanel token={token} role={user?.role} activeReceiptSubtab={activePaymentSubtab} />
     if (active === 'users') return <UserManagementPanel token={token} role={user?.role} />
     if (active === 'reports') return <ReportsPanel token={token} role={user?.role} reports={reports} onRefresh={refreshReports} />
     return <OverviewPanel user={user} reports={reports} />
   }
-
-  const currentTitle = currentSubtabs.find((item) => item.key === activeSubtab)?.label || navItems.find((item) => item.key === active)?.label || 'Dashboard'
-  const currentDescription = active === 'members'
-    ? 'Member records and templates stay linked to the selected member section.'
-    : active === 'services'
-      ? 'Service documents are grouped by service type so the correct workflow stays together.'
-      : active === 'payments'
-        ? 'Receipts and transactions stay grouped under the selected payment sub tab.'
-        : 'Admin and franchisee rules are active in both UI and backend routes.'
 
   return (
     <div className="dashboard-shell">
@@ -812,7 +594,6 @@ function DashboardShell({ auth, onLogout }) {
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-brand">
           <Logo small />
-          <div className="sidebar-brand-text"><strong>Martinsdirect</strong><p>Operations Portal</p></div>
         </div>
 
         <div className="sidebar-user">
@@ -826,31 +607,23 @@ function DashboardShell({ auth, onLogout }) {
 
         <nav className="sidebar-nav">
           {navItems.map((item) => (
-            <div key={item.key} className="sidebar-nav-group">
-              <button
-                className={`nav-btn ${active === item.key ? 'nav-btn-active' : ''}`}
-                type="button"
-                onClick={() => { setActive(item.key); setSidebarOpen(false) }}
-              >
-                {item.label}
-              </button>
-
-              {active === item.key && ['members', 'services', 'payments'].includes(item.key) ? (
-                <div className="sidebar-subnav">
-                  {SECTION_CONFIG[item.key].subtabs.map((subitem) => (
-                    <button
-                      key={subitem.key}
-                      className={`subnav-btn ${activeSubtab === subitem.key ? 'subnav-btn-active' : ''}`}
-                      type="button"
-                      onClick={() => setActiveSubtab(subitem.key)}
-                    >
-                      {subitem.label}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
+            <button
+              key={item.key}
+              className={`nav-btn ${active === item.key ? 'nav-btn-active' : ''}`}
+              type="button"
+              onClick={() => { setActive(item.key); setSidebarOpen(false) }}
+            >
+              {item.label}
+            </button>
           ))}
+
+          {active === 'members' ? (
+            <div className="sidebar-subnav">
+              <button className={`subnav-btn ${activeMemberSubtab === 'insMembers' ? 'subnav-btn-active' : ''}`} type="button" onClick={() => setActiveMemberSubtab('insMembers')}>Ins Members</button>
+              <button className={`subnav-btn ${activeMemberSubtab === 'membershipClub' ? 'subnav-btn-active' : ''}`} type="button" onClick={() => setActiveMemberSubtab('membershipClub')}>Membership Club</button>
+              <button className={`subnav-btn ${activeMemberSubtab === 'society' ? 'subnav-btn-active' : ''}`} type="button" onClick={() => setActiveMemberSubtab('society')}>Society</button>
+            </div>
+          ) : null}
         </nav>
 
         <div className="sidebar-footer">
@@ -861,9 +634,8 @@ function DashboardShell({ auth, onLogout }) {
       <main className="main-content">
         <div className="topbar">
           <div className="topbar-title-wrap">
-            <div className="topbar-kicker">Martinsdirect dashboard</div>
-            <h1>{currentTitle}</h1>
-            <p>{currentDescription}</p>
+            <h1>{navItems.find((item) => item.key === active)?.label || 'Dashboard'}</h1>
+            <p>{active === 'members' ? 'Members imported into Ins Members, Membership Club, and Society will appear here.' : 'Admin and franchisee rules are active in both UI and backend routes.'}</p>
           </div>
           <div className="topbar-right"><Logo small /></div>
         </div>
