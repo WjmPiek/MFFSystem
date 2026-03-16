@@ -2,12 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import './assets/styles/globals.css'
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
-const IS_REMOTE_APP = typeof window !== 'undefined' && /^https?:\/\//.test(window.location.origin)
 const STORAGE_KEY = 'martinsdirect_auth'
 
 function apiUrl(path) {
-  if (API_BASE_URL) return `${API_BASE_URL}${path}`
-  return IS_REMOTE_APP ? `__MISSING_VITE_API_URL__${path}` : path
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path
 }
 
 async function apiFetch(path, options = {}, token) {
@@ -21,12 +19,7 @@ async function apiFetch(path, options = {}, token) {
     headers.Authorization = `Bearer ${token}`
   }
 
-  let response
-  try {
-    response = await fetch(apiUrl(path), { ...options, headers, mode: 'cors' })
-  } catch (error) {
-    throw new Error('Cannot reach the backend. Check CORS, backend URL, and backend health.')
-  }
+  const response = await fetch(apiUrl(path), { ...options, headers })
   const data = await response.json().catch(() => ({}))
 
   if (!response.ok) {
@@ -71,16 +64,13 @@ function LoginScreen({ onLogin, onOpenReset }) {
       body: JSON.stringify({ email, password }),
     })
 
-    const safeAuth = {
-      token: data?.token || data?.access_token,
-      user: data?.user,
-    }
-
-    if (!safeAuth.token || !safeAuth.user) {
+    // Safety check so the app never crashes
+    if (!data || !data.user || !data.token) {
       throw new Error('Invalid login response from server')
     }
 
-    onLogin(safeAuth)
+    onLogin(data)
+
   } catch (err) {
     setError(err.message || 'Login failed')
   } finally {
@@ -476,8 +466,7 @@ function ReportsPanel({ token, role, reports, onRefresh }) {
 }
 
 function DashboardShell({ auth, onLogout }) {
-  const user = auth?.user || {}
-  const token = auth?.token || ''
+  const { user, token } = auth
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [active, setActive] = useState('overview')
   const [reports, setReports] = useState(null)
@@ -502,9 +491,9 @@ if (user?.role === 'admin') items.push({ key: 'users', label: 'User Management' 
   }, [token])
 
   const renderPanel = () => {
-    if (active === 'payments') return <PaymentsPanel token={token} role={user?.role} />
-    if (active === 'users') return <UserManagementPanel token={token} role={user?.role} />
-    if (active === 'reports') return <ReportsPanel token={token} role={user?.role} reports={reports} onRefresh={refreshReports} />
+    if (active === 'payments') return <PaymentsPanel token={token} role={user.role} />
+    if (active === 'users') return <UserManagementPanel token={token} role={user.role} />
+    if (active === 'reports') return <ReportsPanel token={token} role={user.role} reports={reports} onRefresh={refreshReports} />
     return <OverviewPanel user={user} reports={reports} />
   }
 
@@ -519,7 +508,7 @@ if (user?.role === 'admin') items.push({ key: 'users', label: 'User Management' 
         </div>
         <div className="sidebar-user">
           <div className="sidebar-brand-mark">MD</div>
-          <div><strong>{user?.name || 'User'}</strong><p>{user?.email || ''}</p><span className="pill">{user?.role || 'unknown'}</span></div>
+          <div><strong>{user.name}</strong><p>{user.email}</p><span className="pill">{user.role}</span></div>
         </div>
         <nav className="sidebar-nav">
           {navItems.map((item) => (
@@ -545,14 +534,9 @@ if (user?.role === 'admin') items.push({ key: 'users', label: 'User Management' 
 
 export default function App() {
   const [auth, setAuth] = useState(() => {
-  try {
     const stored = localStorage.getItem(STORAGE_KEY)
-    const parsed = stored ? JSON.parse(stored) : null
-    return parsed?.token && parsed?.user ? parsed : null
-  } catch {
-    return null
-  }
-})
+    return stored ? JSON.parse(stored) : null
+  })
   const [resetOpen, setResetOpen] = useState(false)
   const [resetToken, setResetToken] = useState('')
 
