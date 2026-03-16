@@ -730,7 +730,6 @@ function DashboardShell({ auth, onLogout }) {
         </div>
 
         <div className="sidebar-user">
-          <Logo small className="sidebar-user-logo" />
           <div className="sidebar-user-copy">
             <strong>{user?.name || 'User'}</strong>
             <p>{user?.email || ''}</p>
