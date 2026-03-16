@@ -1,0 +1,14 @@
+Frontend and backend have been locked to the working Render deployment.
+
+Frontend:
+- frontend/.env.production -> https://mffsystem-backend.onrender.com
+- frontend/.env -> http://localhost:5000
+
+Backend:
+- backend/.env.example includes FRONTEND_URLS for local + Render frontend
+- backend/app/__init__.py already accepts FRONTEND_URLS / FRONTEND_URL and handles API preflight
+
+If the Render domain changes later, update only:
+- frontend/.env.production
+- Render frontend env VITE_API_URL
+- Render backend env FRONTEND_URLS or FRONTEND_URL

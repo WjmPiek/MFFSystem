@@ -4,10 +4,14 @@ import './assets/styles/globals.css'
 const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 const IS_REMOTE_APP = typeof window !== 'undefined' && /^https?:\/\//.test(window.location.origin)
 const STORAGE_KEY = 'martinsdirect_auth'
+const API_CONFIG_ERROR = 'Frontend API URL is not configured. Set VITE_API_URL before deploying.'
 
 function apiUrl(path) {
   if (API_BASE_URL) return `${API_BASE_URL}${path}`
-  return IS_REMOTE_APP ? `__MISSING_VITE_API_URL__${path}` : path
+  if (IS_REMOTE_APP) {
+    throw new Error(API_CONFIG_ERROR)
+  }
+  return path
 }
 
 async function apiFetch(path, options = {}, token) {
@@ -25,7 +29,7 @@ async function apiFetch(path, options = {}, token) {
   try {
     response = await fetch(apiUrl(path), { ...options, headers, mode: 'cors' })
   } catch (error) {
-    throw new Error('Cannot reach the backend. Check CORS, backend URL, and backend health.')
+    throw new Error(error?.message === API_CONFIG_ERROR ? API_CONFIG_ERROR : 'Cannot reach the backend. Check CORS, backend URL, and backend health.')
   }
   const data = await response.json().catch(() => ({}))
 
