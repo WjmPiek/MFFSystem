@@ -479,16 +479,101 @@ function ReportsPanel({ token, role, reports, onRefresh }) {
   )
 }
 
+
+function MemberCard({ title, description, items = [] }) {
+  return (
+    <div className="panel">
+      <div className="panel-header"><div><h2>{title}</h2><p>{description}</p></div></div>
+      <div className="badge-row">
+        {items.map((item) => <span key={item} className="pill">{item}</span>)}
+      </div>
+    </div>
+  )
+}
+
+function MembersPanel({ section }) {
+  if (section === 'ins-members') {
+    return (
+      <div className="stack-lg">
+        <MemberCard
+          title="Ins Members"
+          description="Manage insurance-related member records, onboarding status, and contact groupings."
+          items={['Member roster', 'Policy references', 'Contact updates']}
+        />
+        <div className="panel">
+          <div className="panel-header"><div><h2>Suggested fields</h2><p>Use this section for imported or manually maintained insurance membership data.</p></div></div>
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead><tr><th>Member</th><th>Status</th><th>Reference</th><th>Branch</th></tr></thead>
+              <tbody>
+                <tr><td>Demo Member A</td><td>Active</td><td>INS-1001</td><td>Pretoria West</td></tr>
+                <tr><td>Demo Member B</td><td>Pending</td><td>INS-1002</td><td>Centurion</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (section === 'membership-club') {
+    return (
+      <div className="stack-lg">
+        <MemberCard
+          title="Membership Club"
+          description="Track club membership plans, renewals, payment references, and benefit tiers."
+          items={['Club plans', 'Renewals', 'Benefits']}
+        />
+        <div className="panel">
+          <div className="panel-header"><div><h2>Club overview</h2><p>Create and maintain categories for social or paid membership clubs.</p></div></div>
+          <div className="badge-row">
+            <span className="pill">Monthly club billing</span>
+            <span className="pill">Renewal reminders</span>
+            <span className="pill">Member status</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="stack-lg">
+      <MemberCard
+        title="Society"
+        description="Organize society memberships, committees, and grouped member records."
+        items={['Committee roles', 'Society members', 'Meeting lists']}
+      />
+      <div className="panel">
+        <div className="panel-header"><div><h2>Society notes</h2><p>Use this area for society-specific administration, billing references, or grouped communication lists.</p></div></div>
+        <div className="badge-row">
+          <span className="pill">Member classes</span>
+          <span className="pill">Committee contacts</span>
+          <span className="pill">Status history</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function DashboardShell({ auth, onLogout }) {
   const user = auth?.user || {}
   const token = auth?.token || ''
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [active, setActive] = useState('overview')
+  const [membersOpen, setMembersOpen] = useState(true)
   const [reports, setReports] = useState(null)
 
   const navItems = useMemo(() => {
-    const items = [{ key: 'overview', label: 'Overview' }, { key: 'payments', label: 'Payments' }]
-if (user?.role === 'admin') items.push({ key: 'users', label: 'User Management' }, { key: 'reports', label: 'Reports' })
+    const items = [
+      { key: 'overview', label: 'Overview' },
+      { key: 'payments', label: 'Payments' },
+      { key: 'members', label: 'Members', children: [
+        { key: 'ins-members', label: 'Ins Members' },
+        { key: 'membership-club', label: 'Membership Club' },
+        { key: 'society', label: 'Society' },
+      ] },
+    ]
+    if (user?.role === 'admin') items.push({ key: 'users', label: 'User Management' }, { key: 'reports', label: 'Reports' })
     return items
   }, [user?.role])
 
@@ -507,6 +592,7 @@ if (user?.role === 'admin') items.push({ key: 'users', label: 'User Management' 
 
   const renderPanel = () => {
     if (active === 'payments') return <PaymentsPanel token={token} role={user?.role} />
+    if (active === 'ins-members' || active === 'membership-club' || active === 'society') return <MembersPanel section={active} />
     if (active === 'users') return <UserManagementPanel token={token} role={user?.role} />
     if (active === 'reports') return <ReportsPanel token={token} role={user?.role} reports={reports} onRefresh={refreshReports} />
     return <OverviewPanel user={user} reports={reports} />
@@ -527,9 +613,26 @@ if (user?.role === 'admin') items.push({ key: 'users', label: 'User Management' 
         </div>
         <nav className="sidebar-nav">
           {navItems.map((item) => (
-            <button key={item.key} className={`nav-btn ${active === item.key ? 'nav-btn-active' : ''}`} type="button" onClick={() => { setActive(item.key); setSidebarOpen(false) }}>
-              {item.label}
-            </button>
+            item.children ? (
+              <div key={item.key} className="sidebar-group">
+                <button className={`nav-btn ${item.children.some((child) => child.key === active) ? 'nav-btn-active' : ''}`} type="button" onClick={() => setMembersOpen((value) => !value)}>
+                  {item.label}
+                </button>
+                {membersOpen ? (
+                  <div className="subnav">
+                    {item.children.map((child) => (
+                      <button key={child.key} className={`nav-sub-btn ${active === child.key ? 'nav-sub-btn-active' : ''}`} type="button" onClick={() => { setActive(child.key); setSidebarOpen(false) }}>
+                        {child.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <button key={item.key} className={`nav-btn ${active === item.key ? 'nav-btn-active' : ''}`} type="button" onClick={() => { setActive(item.key); setSidebarOpen(false) }}>
+                {item.label}
+              </button>
+            )
           ))}
         </nav>
         <div className="sidebar-footer">
