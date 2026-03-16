@@ -67,7 +67,7 @@ async function apiFetch(path, options = {}, token) {
 }
 
 function Logo({ small = false, className = '' }) {
-  return null (
+  return (
     <div className={`brand-lockup ${small ? 'brand-lockup-small' : ''} ${className}`.trim()} aria-label="Martinsdirect">
       <img className="brand-image" src="/logo.png" alt="Martinsdirect logo" />
     </div>
