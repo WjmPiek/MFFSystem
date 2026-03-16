@@ -1,10 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
+import * as XLSX from 'xlsx'
 import './assets/styles/globals.css'
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 const IS_REMOTE_APP = typeof window !== 'undefined' && /^https?:\/\//.test(window.location.origin)
 const STORAGE_KEY = 'martinsdirect_auth'
 const API_CONFIG_ERROR = 'Frontend API URL is not configured. Set VITE_API_URL before deploying.'
+const MEMBER_IMPORTS_KEY = 'martinsdirect_member_imports'
+const MEMBER_TEMPLATE_URL = '/templates/members-import-template.xlsx'
+const MEMBER_SECTIONS = [
+  { key: 'ins-members', label: 'Ins Members', sheet: 'Ins Members' },
+  { key: 'membership-club', label: 'Membership Club', sheet: 'Membership Club' },
+  { key: 'society', label: 'Society', sheet: 'Society' },
+]
 
 function apiUrl(path) {
   if (API_BASE_URL) return `${API_BASE_URL}${path}`
@@ -38,6 +46,179 @@ async function apiFetch(path, options = {}, token) {
   }
 
   return data
+}
+
+function readStoredMemberImports() {
+  try {
+    const stored = localStorage.getItem(MEMBER_IMPORTS_KEY)
+    return stored ? JSON.parse(stored) : {}
+  } catch {
+    return {}
+  }
+}
+
+function normaliseRow(row = {}) {
+  return {
+    memberId: row['Member ID'] || row.memberId || '',
+    fullName: row['Full Name'] || row.fullName || row.Name || '',
+    email: row.Email || row.email || '',
+    phone: row.Phone || row.phone || '',
+    status: row.Status || row.status || '',
+    reference: row.Reference || row.reference || '',
+    branchGroup: row['Branch/Group'] || row.branchGroup || row.Group || '',
+    notes: row.Notes || row.notes || '',
+  }
+}
+
+function parseMemberWorkbook(file) {
+  return file.arrayBuffer().then((buffer) => {
+    const workbook = XLSX.read(buffer, { type: 'array' })
+    const parsed = {}
+
+    MEMBER_SECTIONS.forEach((section) => {
+      const worksheet = workbook.Sheets[section.sheet]
+      if (!worksheet) {
+        parsed[section.key] = []
+        return
+      }
+      const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' })
+      parsed[section.key] = rows
+        .map((row) => normaliseRow(row))
+        .filter((row) => row.fullName || row.memberId || row.reference)
+    })
+
+    return parsed
+  })
+}
+
+function MemberCard({ title, description, items = [] }) {
+  return (
+    <div className="panel">
+      <div className="panel-header"><div><h2>{title}</h2><p>{description}</p></div></div>
+      <div className="badge-row">
+        {items.map((item) => <span key={item} className="pill">{item}</span>)}
+      </div>
+    </div>
+  )
+}
+
+function MembersPanel({ section, importedData }) {
+  const rows = importedData?.[section] || []
+  const sectionMeta = MEMBER_SECTIONS.find((item) => item.key === section)
+
+  if (!rows.length) {
+    return (
+      <div className="stack-lg">
+        <MemberCard
+          title={sectionMeta?.label || 'Members'}
+          description="No imported records found yet. Use Import Data to upload the Excel template and load members into this tab."
+          items={['Excel import ready', 'Template available', 'Data appears here after upload']}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="stack-lg">
+      <MemberCard
+        title={sectionMeta?.label || 'Members'}
+        description={`Imported member records currently loaded under ${sectionMeta?.label || 'Members'}.`}
+        items={[`${rows.length} record(s) loaded`, 'Excel template compatible', 'Data ready for review']}
+      />
+      <div className="panel">
+        <div className="panel-header"><div><h2>{sectionMeta?.label}</h2><p>Imported records from the member Excel template.</p></div></div>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead><tr><th>Member ID</th><th>Full Name</th><th>Email</th><th>Phone</th><th>Status</th><th>Reference</th><th>Branch/Group</th><th>Notes</th></tr></thead>
+            <tbody>
+              {rows.map((row, index) => (
+                <tr key={`${row.memberId}-${index}`}>
+                  <td>{row.memberId || '-'}</td>
+                  <td>{row.fullName || '-'}</td>
+                  <td>{row.email || '-'}</td>
+                  <td>{row.phone || '-'}</td>
+                  <td>{row.status || '-'}</td>
+                  <td>{row.reference || '-'}</td>
+                  <td>{row.branchGroup || '-'}</td>
+                  <td>{row.notes || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ImportDataPanel({ importedData, onImport, onClear }) {
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const totals = useMemo(() => ({
+    insMembers: importedData?.['ins-members']?.length || 0,
+    membershipClub: importedData?.['membership-club']?.length || 0,
+    society: importedData?.society?.length || 0,
+  }), [importedData])
+
+  const totalRows = totals.insMembers + totals.membershipClub + totals.society
+
+  const handleImport = async () => {
+    if (!selectedFile) {
+      setMessage('Choose the Excel template file before importing.')
+      return
+    }
+
+    setLoading(true)
+    setMessage('')
+    try {
+      const parsed = await parseMemberWorkbook(selectedFile)
+      onImport(parsed)
+      setMessage(`Import completed. ${Object.values(parsed).flat().length} record(s) loaded into Members.`)
+      setSelectedFile(null)
+    } catch (error) {
+      setMessage(error?.message || 'Import failed. Check the Excel template and try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="stack-lg">
+      <div className="panel">
+        <div className="panel-header"><div><h2>Import Data</h2><p>Download the Excel template, populate the three member sheets, and import the workbook to load records under Members.</p></div></div>
+        <div className="import-download-bar">
+          <div>
+            <strong>Download Excel template</strong>
+            <p>Includes sheets for Ins Members, Membership Club, and Society.</p>
+          </div>
+          <a className="btn btn-primary" href={MEMBER_TEMPLATE_URL} download>Download template</a>
+        </div>
+        <div className="grid-two">
+          <div className="form-group">
+            <label>Upload populated .xlsx file</label>
+            <input type="file" accept=".xlsx" onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} />
+          </div>
+          <div className="import-summary">
+            <span>Total imported rows</span>
+            <strong>{totalRows}</strong>
+            <small>Loaded into Members subtabs after import.</small>
+          </div>
+        </div>
+        <div className="panel-actions">
+          <button className="btn btn-primary" type="button" onClick={handleImport} disabled={loading}>{loading ? 'Importing...' : 'Import workbook'}</button>
+          <button className="btn btn-secondary" type="button" onClick={onClear}>Clear imported data</button>
+        </div>
+        {message ? <div className="auth-error auth-info">{message}</div> : null}
+      </div>
+      <div className="content-grid">
+        <div className="stat-card"><span>Ins Members</span><strong>{totals.insMembers}</strong></div>
+        <div className="stat-card"><span>Membership Club</span><strong>{totals.membershipClub}</strong></div>
+        <div className="stat-card"><span>Society</span><strong>{totals.society}</strong></div>
+      </div>
+    </div>
+  )
 }
 
 function Logo({ small = false }) {
@@ -480,82 +661,7 @@ function ReportsPanel({ token, role, reports, onRefresh }) {
 }
 
 
-function MemberCard({ title, description, items = [] }) {
-  return (
-    <div className="panel">
-      <div className="panel-header"><div><h2>{title}</h2><p>{description}</p></div></div>
-      <div className="badge-row">
-        {items.map((item) => <span key={item} className="pill">{item}</span>)}
-      </div>
-    </div>
-  )
-}
-
-function MembersPanel({ section }) {
-  if (section === 'ins-members') {
-    return (
-      <div className="stack-lg">
-        <MemberCard
-          title="Ins Members"
-          description="Manage insurance-related member records, onboarding status, and contact groupings."
-          items={['Member roster', 'Policy references', 'Contact updates']}
-        />
-        <div className="panel">
-          <div className="panel-header"><div><h2>Suggested fields</h2><p>Use this section for imported or manually maintained insurance membership data.</p></div></div>
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead><tr><th>Member</th><th>Status</th><th>Reference</th><th>Branch</th></tr></thead>
-              <tbody>
-                <tr><td>Demo Member A</td><td>Active</td><td>INS-1001</td><td>Pretoria West</td></tr>
-                <tr><td>Demo Member B</td><td>Pending</td><td>INS-1002</td><td>Centurion</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (section === 'membership-club') {
-    return (
-      <div className="stack-lg">
-        <MemberCard
-          title="Membership Club"
-          description="Track club membership plans, renewals, payment references, and benefit tiers."
-          items={['Club plans', 'Renewals', 'Benefits']}
-        />
-        <div className="panel">
-          <div className="panel-header"><div><h2>Club overview</h2><p>Create and maintain categories for social or paid membership clubs.</p></div></div>
-          <div className="badge-row">
-            <span className="pill">Monthly club billing</span>
-            <span className="pill">Renewal reminders</span>
-            <span className="pill">Member status</span>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="stack-lg">
-      <MemberCard
-        title="Society"
-        description="Organize society memberships, committees, and grouped member records."
-        items={['Committee roles', 'Society members', 'Meeting lists']}
-      />
-      <div className="panel">
-        <div className="panel-header"><div><h2>Society notes</h2><p>Use this area for society-specific administration, billing references, or grouped communication lists.</p></div></div>
-        <div className="badge-row">
-          <span className="pill">Member classes</span>
-          <span className="pill">Committee contacts</span>
-          <span className="pill">Status history</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function DashboardShell({ auth, onLogout }) {
+function DashboardShell({ auth, importedData, onImportData, onClearImportedData, onLogout }) {
   const user = auth?.user || {}
   const token = auth?.token || ''
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -652,14 +758,15 @@ function DashboardShell({ auth, onLogout }) {
 
 export default function App() {
   const [auth, setAuth] = useState(() => {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    const parsed = stored ? JSON.parse(stored) : null
-    return parsed?.token && parsed?.user ? parsed : null
-  } catch {
-    return null
-  }
-})
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      const parsed = stored ? JSON.parse(stored) : null
+      return parsed?.token && parsed?.user ? parsed : null
+    } catch {
+      return null
+    }
+  })
+  const [importedData, setImportedData] = useState(() => readStoredMemberImports())
   const [resetOpen, setResetOpen] = useState(false)
   const [resetToken, setResetToken] = useState('')
 
@@ -667,6 +774,10 @@ export default function App() {
     if (auth) localStorage.setItem(STORAGE_KEY, JSON.stringify(auth))
     else localStorage.removeItem(STORAGE_KEY)
   }, [auth])
+
+  useEffect(() => {
+    localStorage.setItem(MEMBER_IMPORTS_KEY, JSON.stringify(importedData))
+  }, [importedData])
 
   if (!auth) {
     return (
@@ -677,5 +788,5 @@ export default function App() {
     )
   }
 
-  return <DashboardShell auth={auth} onLogout={() => setAuth(null)} />
+  return <DashboardShell auth={auth} importedData={importedData} onImportData={setImportedData} onClearImportedData={() => setImportedData({})} onLogout={() => setAuth(null)} />
 }
