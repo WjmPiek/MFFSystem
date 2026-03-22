@@ -7,6 +7,7 @@ from .extensions import db, migrate
 from .models import User
 from .permissions import normalize_role
 from .routes import api
+from .routes.audit import audit_bp
 
 
 def _normalize_database_url(database_url):
@@ -67,6 +68,7 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
     app.register_blueprint(api, url_prefix='/api')
+    app.register_blueprint(audit_bp)
 
     _ensure_default_admin(app)
     return app
