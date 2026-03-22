@@ -477,7 +477,7 @@ select {
 }
 
 .auth-brand-panel::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: -20%;
   background:
@@ -521,14 +521,9 @@ select {
   backdrop-filter: blur(8px);
 }
 
-.auth-form-kicker,
-.auth-eyebrow {
-  color: var(--primary);
-  font-weight: 700;
-}
-
 .auth-brand-copy {
-  max-width: 560px;
+  position: relative;
+  z-index: 1;
 }
 
 .auth-eyebrow {
@@ -559,14 +554,6 @@ select {
   margin-top: 28px;
   font-size: 1.2rem;
   line-height: 1.7;
-}
-
-.auth-feature-list {
-  display: none;
-}
-
-.auth-feature-item {
-  display: none;
 }
 
 .auth-brand-footer {
@@ -673,80 +660,15 @@ select {
   }
 }
 
-.auth-error {
-  margin-top: 12px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: #fff1f2;
-  color: #b42318;
-  border: 1px solid #fecdd3;
-}
-
-.auth-info {
-  background: #eef8ff;
-  color: #145ca8;
-  border-color: #cbe6ff;
-}
-
-.link-btn {
-  background: transparent;
-  padding: 0;
-  color: var(--primary);
-  font-weight: 700;
-  justify-self: start;
-}
-
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(18, 24, 38, 0.45);
-  display: grid;
-  place-items: center;
-  z-index: 50;
-  padding: 20px;
-}
-
-.modal-card {
-  width: min(640px, 100%);
-  border-radius: 26px;
-  padding: 24px;
-}
-
-.mobile-menu-btn,
-.mobile-overlay {
-  display: none;
-}
-
-.top-gap {
-  margin-top: 14px;
-}
-
 @media (max-width: 1100px) {
   .content-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .employees-grid,
+  .auth-card,
   .service-grid {
     grid-template-columns: 1fr;
-  }
-
-  .auth-card {
-    grid-template-columns: 1fr;
-    min-height: auto;
-  }
-
-  .auth-brand-panel,
-  .auth-form-panel {
-    padding: 32px 28px;
-  }
-
-  .auth-brand-content {
-    gap: 32px;
-  }
-
-  .auth-brand-title {
-    max-width: 100%;
   }
 }
 
@@ -793,21 +715,6 @@ select {
 }
 
 @media (max-width: 640px) {
-  .auth-brand-top {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .auth-badge {
-    min-height: auto;
-    padding: 12px 16px;
-  }
-
-  .auth-copy-refined {
-    font-size: 1.02rem;
-    line-height: 1.65;
-  }
-
   .content-grid,
   .grid-two {
     grid-template-columns: 1fr;
