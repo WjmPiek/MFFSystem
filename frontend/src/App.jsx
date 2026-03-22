@@ -103,7 +103,12 @@ function LoginScreen({ onLogin, onOpenReset }) {
 
       onLogin(safeAuth)
     } catch (err) {
-      setError(err.message || 'Login failed')
+      const message = err?.message || 'Login failed'
+      setError(
+        message === 'Failed to fetch'
+          ? 'Unable to reach the sign-in service. Check the backend URL and CORS settings.'
+          : message
+      )
     } finally {
       setSubmitting(false)
     }
@@ -114,24 +119,26 @@ function LoginScreen({ onLogin, onOpenReset }) {
       <div className="auth-backdrop" />
       <div className="auth-card">
         <section className="auth-brand-panel auth-brand-panel-refined">
+          <div className="auth-brand-orb auth-brand-orb-top" />
+          <div className="auth-brand-orb auth-brand-orb-bottom" />
+
           <div className="auth-brand-content">
             <div className="auth-brand-top">
-              <Logo />
+              <Logo className="auth-logo" />
               <span className="auth-badge">Secure admin access</span>
             </div>
 
             <div className="auth-brand-copy auth-fade-up auth-fade-delay-1">
-              <p className="auth-eyebrow">Martin&apos;s Funerals</p>
+              <p className="auth-eyebrow auth-eyebrow-light">Martin's Funerals</p>
               <h1 className="auth-brand-title">Management Platform</h1>
               <p className="auth-copy auth-copy-refined">
-                Manage operations, payments, employee records, and platform settings
-                from one secure, centralized dashboard.
+                Manage operations, payments, employee records, and platform settings from one secure, centralized dashboard.
               </p>
             </div>
           </div>
 
           <div className="auth-brand-footer auth-fade-up auth-fade-delay-2">
-            Martin&apos;s funerals Franchising professionals nationwide
+            Martin's funerals Franchising professionals nationwide
           </div>
         </section>
 
@@ -139,11 +146,11 @@ function LoginScreen({ onLogin, onOpenReset }) {
           <div className="auth-form-header">
             <p className="auth-form-kicker">Administrator sign in</p>
             <h2>Welcome back</h2>
-            <p>Use your Martinsdirect account details.</p>
+            <p>Use your Martinsdirect admin email and password to continue.</p>
           </div>
           <form className="auth-form" onSubmit={handleSubmit}>
             <div className="form-group auth-form-group">
-              <label htmlFor="email">Email</label>
+              <label htmlFor="email">Email address</label>
               <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
             </div>
             <div className="form-group auth-form-group">
@@ -156,10 +163,10 @@ function LoginScreen({ onLogin, onOpenReset }) {
               </div>
             </div>
             {error ? <div className="auth-error">{error}</div> : null}
-            <button className="primary-auth-btn" type="submit" disabled={submitting}>{submitting ? 'Signing in...' : 'Sign in'}</button>
+            <button className="primary-auth-btn" type="submit" disabled={submitting}>{submitting ? 'Signing in...' : 'Sign in to dashboard'}</button>
           </form>
           <div className="auth-footer-note">
-            <strong>Default seeded admin</strong>
+            <strong>Admin account</strong>
             <span>wjm@martinsdirect.com</span>
             <small>Use Forgot password to generate a reset token in non-production mode.</small>
             <button type="button" className="link-btn" onClick={onOpenReset}>Forgot password?</button>

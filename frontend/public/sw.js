@@ -1,4 +1,4 @@
-const CACHE_NAME = 'martinsdirect-shell-v1'
+const CACHE_NAME = 'martinsdirect-shell-v2'
 const ASSETS = [
   '/',
   '/site.webmanifest',

@@ -47,12 +47,21 @@ def create_app():
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret')
 
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    frontend_urls = os.getenv('FRONTEND_URLS', '').strip()
+    if frontend_urls:
+        allowed_origins = [item.strip() for item in frontend_urls.split(',') if item.strip()]
+    else:
+        frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173').strip()
+        allowed_origins = [frontend_url] if frontend_url else []
+
+    for default_origin in ['http://localhost:5173', 'http://127.0.0.1:5173']:
+        if default_origin not in allowed_origins:
+            allowed_origins.append(default_origin)
 
     CORS(
-    app,
-    resources={r"/api/*": {"origins": [frontend_url]}},
-    supports_credentials=True,
+        app,
+        resources={r"/api/*": {"origins": allowed_origins or '*'}},
+        supports_credentials=True,
     )
 
     db.init_app(app)
