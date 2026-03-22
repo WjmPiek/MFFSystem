@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './assets/styles/globals.css'
+import { apiFetch } from "./api"
 
 const ENV_API_BASE_URL = (import.meta.env.VITE_API_URL || '').trim()
 
