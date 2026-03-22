@@ -606,6 +606,107 @@ function ServicesPanel({ activeSubtab, setActiveSubtab }) {
   )
 }
 
+function ActivityPanel({ token, role }) {
+  const [logs, setLogs] = useState([])
+  const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const loadLogs = async (email = '') => {
+    setLoading(true)
+    setError('')
+    try {
+      const query = email ? `?email=${encodeURIComponent(email)}` : ''
+      const data = await apiFetch(`/api/audit-logs${query}`, {}, token)
+      setLogs(Array.isArray(data) ? data : [])
+    } catch (err) {
+      setError(err.message || 'Failed to load activity logs')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (role === 'admin') {
+      loadLogs(search)
+    }
+  }, [token, role])
+
+  const handleSearch = () => {
+    loadLogs(search)
+  }
+
+  if (role !== 'admin') {
+    return (
+      <div className="panel">
+        <h2>Activity</h2>
+        <p>Only admin can view activity history.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="panel">
+      <div className="panel-header">
+        <div>
+          <h2>Activity History</h2>
+          <p>Track who did what across the platform.</p>
+        </div>
+      </div>
+
+      <div className="grid-two">
+        <div className="form-group">
+          <label>Search by email</label>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="wjm@martinsdirect.com"
+          />
+        </div>
+        <div className="panel-actions align-end">
+          <button className="btn btn-primary" type="button" onClick={handleSearch} disabled={loading}>
+            {loading ? 'Loading...' : 'Search'}
+          </button>
+        </div>
+      </div>
+
+      {error ? <div className="auth-error top-gap">{error}</div> : null}
+
+      <div className="table-wrap top-gap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Action</th>
+              <th>Entity</th>
+              <th>Entity ID</th>
+              <th>IP Address</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {logs.map((log) => (
+              <tr key={log.id}>
+                <td>{log.user_email || '-'}</td>
+                <td>{log.action || '-'}</td>
+                <td>{log.entity_type || '-'}</td>
+                <td>{log.entity_id || '-'}</td>
+                <td>{log.ip_address || '-'}</td>
+                <td>{log.created_at ? new Date(log.created_at).toLocaleString() : '-'}</td>
+              </tr>
+            ))}
+            {!logs.length && !loading ? (
+              <tr>
+                <td colSpan="6" className="empty-row">No activity logs found.</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 function DashboardShell({ auth, onLogout }) {
   const user = auth?.user || {}
   const token = auth?.token || ''
@@ -625,15 +726,21 @@ function DashboardShell({ auth, onLogout }) {
   })
 
   const menuSections = useMemo(() => {
-    const sections = [
-      { key: 'overview', label: 'Overview' },
-      { key: 'members', label: 'Members', items: MEMBER_TABS },
-      { key: 'services', label: 'Services', items: SERVICE_TABS },
-      { key: 'payments', label: 'Payments', items: PAYMENT_TABS },
-    ]
-    if (user?.role === 'admin') sections.push({ key: 'users', label: 'User Management' }, { key: 'reports', label: 'Reports' })
-    return sections
-  }, [user?.role])
+  const sections = [
+    { key: 'overview', label: 'Overview' },
+    { key: 'members', label: 'Members', items: MEMBER_TABS },
+    { key: 'services', label: 'Services', items: SERVICE_TABS },
+    { key: 'payments', label: 'Payments', items: PAYMENT_TABS },
+  ]
+  if (user?.role === 'admin') {
+    sections.push(
+      { key: 'users', label: 'User Management' },
+      { key: 'reports', label: 'Reports' },
+      { key: 'activity', label: 'Activity' }
+    )
+  }
+  return sections
+}, [user?.role])
 
   useEffect(() => {
     localStorage.setItem(MEMBERS_KEY, JSON.stringify(memberData))
@@ -672,22 +779,24 @@ function DashboardShell({ auth, onLogout }) {
   }, [token])
 
   const headingMap = {
-    overview: 'Overview',
-    members: 'Members',
-    services: 'Services',
-    payments: 'Payments',
-    users: 'User Management',
-    reports: 'Reports',
-  }
+  overview: 'Overview',
+  members: 'Members',
+  services: 'Services',
+  payments: 'Payments',
+  users: 'User Management',
+  reports: 'Reports',
+  activity: 'Activity',
+}
 
   const subtitleMap = {
-    overview: 'Admin and franchisee rules are active in both UI and backend routes.',
-    members: 'Review and manage member records by section from the left sidebar.',
-    services: 'Service subtabs now align cleanly and group linked documents by workflow.',
-    payments: 'Payment receipt subtabs are fixed and grouped professionally in the left sidebar.',
-    users: 'Create and manage portal access for admins, franchisees, and users.',
-    reports: 'Summary reporting remains available for admin access.',
-  }
+  overview: 'Admin and franchisee rules are active in both UI and backend routes.',
+  members: 'Review and manage member records by section from the left sidebar.',
+  services: 'Service subtabs now align cleanly and group linked documents by workflow.',
+  payments: 'Payment receipt subtabs are fixed and grouped professionally in the left sidebar.',
+  users: 'Create and manage portal access for admins, franchisees, and users.',
+  reports: 'Summary reporting remains available for admin access.',
+  activity: 'Review user actions and system activity history.',
+}
 
   const openSection = (sectionKey, subtabKey) => {
     setActive(sectionKey)
@@ -698,13 +807,14 @@ function DashboardShell({ auth, onLogout }) {
   }
 
   const renderPanel = () => {
-    if (active === 'payments') return <PaymentsPanel token={token} role={user?.role} activeSubtab={activePaymentSubtab} setActiveSubtab={setActivePaymentSubtab} />
-    if (active === 'members') return <MembersPanel data={memberData} activeSubtab={activeMemberSubtab} setActiveSubtab={setActiveMemberSubtab} />
-    if (active === 'services') return <ServicesPanel activeSubtab={activeServiceSubtab} setActiveSubtab={setActiveServiceSubtab} />
-    if (active === 'users') return <UserManagementPanel token={token} role={user?.role} />
-    if (active === 'reports') return <ReportsPanel token={token} role={user?.role} reports={reports} onRefresh={refreshReports} />
-    return <OverviewPanel user={user} reports={reports} />
-  }
+  if (active === 'payments') return <PaymentsPanel token={token} role={user?.role} activeSubtab={activePaymentSubtab} setActiveSubtab={setActivePaymentSubtab} />
+  if (active === 'members') return <MembersPanel data={memberData} activeSubtab={activeMemberSubtab} setActiveSubtab={setActiveMemberSubtab} />
+  if (active === 'services') return <ServicesPanel activeSubtab={activeServiceSubtab} setActiveSubtab={setActiveServiceSubtab} />
+  if (active === 'users') return <UserManagementPanel token={token} role={user?.role} />
+  if (active === 'reports') return <ReportsPanel token={token} role={user?.role} reports={reports} onRefresh={refreshReports} />
+  if (active === 'activity') return <ActivityPanel token={token} role={user?.role} />
+  return <OverviewPanel user={user} reports={reports} />
+}
 
   return (
     <div className="dashboard-shell">
