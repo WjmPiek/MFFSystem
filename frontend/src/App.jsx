@@ -1,7 +1,48 @@
 import { useEffect, useMemo, useState } from 'react'
 import './assets/styles/globals.css'
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+const ENV_API_BASE_URL = (import.meta.env.VITE_API_URL || '').trim()
+
+function stripTrailingSlash(value) {
+  return (value || '').replace(/\/$/, '')
+}
+
+function inferRenderBackendUrl(hostname) {
+  if (!hostname || !hostname.endsWith('.onrender.com')) return ''
+
+  if (hostname.includes('frontend')) {
+    return `https://${hostname.replace('frontend', 'backend')}`
+  }
+
+  if (hostname.includes('site')) {
+    return `https://${hostname.replace('site', 'backend')}`
+  }
+
+  return ''
+}
+
+function resolveApiBaseUrl() {
+  if (ENV_API_BASE_URL) return stripTrailingSlash(ENV_API_BASE_URL)
+
+  if (typeof window === 'undefined') return ''
+
+  const { protocol, hostname, origin } = window.location
+
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:5000'
+  }
+
+  const inferredRenderUrl = inferRenderBackendUrl(hostname)
+  if (inferredRenderUrl) return inferredRenderUrl
+
+  if (protocol.startsWith('http')) {
+    return stripTrailingSlash(origin)
+  }
+
+  return ''
+}
+
+const API_BASE_URL = resolveApiBaseUrl()
 const STORAGE_KEY = 'martinsdirect_auth'
 const MEMBERS_KEY = 'martinsdirect_members_data'
 
@@ -56,7 +97,11 @@ async function apiFetch(path, options = {}, token) {
 
   if (token) headers.Authorization = `Bearer ${token}`
 
-  const response = await fetch(apiUrl(path), { ...options, headers })
+  const response = await fetch(apiUrl(path), {
+    ...options,
+    headers,
+    mode: 'cors',
+  })
   const data = await response.json().catch(() => ({}))
 
   if (!response.ok) {
@@ -106,7 +151,7 @@ function LoginScreen({ onLogin, onOpenReset }) {
       const message = err?.message || 'Login failed'
       setError(
         message === 'Failed to fetch'
-          ? 'Unable to reach the sign-in service. Check the backend URL and CORS settings.'
+          ? `Unable to reach the sign-in service at ${apiUrl('/api/auth/login')}. Check VITE_API_URL on the frontend and FRONTEND_URL on the backend.`
           : message
       )
     } finally {
