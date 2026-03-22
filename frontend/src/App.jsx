@@ -2,6 +2,44 @@ import { useEffect, useMemo, useState } from 'react'
 import './assets/styles/globals.css'
 import { apiFetch, apiUrl } from './api'
 
+// ===== REQUIRED CONSTANTS =====
+
+const MEMBER_TABS = [
+  { key: 'insMembers', label: 'Insurance Members' },
+  { key: 'membershipClub', label: 'Membership Club' },
+  { key: 'society', label: 'Society' },
+]
+
+const SERVICE_TABS = [
+  { key: 'funerals', label: 'Funerals' },
+  { key: 'cremations', label: 'Cremations' },
+  { key: 'repatriations', label: 'Repatriations' },
+]
+
+const PAYMENT_TABS = [
+  { key: 'insReceipt', label: 'Insurance Receipts' },
+  { key: 'membershipReceipt', label: 'Membership Receipts' },
+  { key: 'otherReceipt', label: 'Other Receipts' },
+]
+
+const SERVICE_CONTENT = {
+  funerals: {
+    title: "Funerals",
+    description: "Manage funeral cases and documentation.",
+    documents: ["Death certificate", "ID copy", "Funeral policy"],
+  },
+  cremations: {
+    title: "Cremations",
+    description: "Manage cremation case intake and monitor.",
+    documents: ["Cremation consent", "Medical certificate"],
+  },
+  repatriations: {
+    title: "Repatriations",
+    description: "Follow transport cases and monitor each step.",
+    documents: ["Passport / ID copy", "Transit permit"],
+  },
+}
+
 const STORAGE_KEY = 'martinsdirect_auth'
 const MEMBERS_KEY = 'martinsdirect_members_data'
 
