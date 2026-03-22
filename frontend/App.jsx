@@ -1,11 +1,31 @@
 import { useEffect, useMemo, useState } from 'react'
 import './assets/styles/globals.css'
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+function normalizeBaseUrl(value) {
+  return (value || '').trim().replace(/\/$/, '')
+}
+
+function guessBackendBaseUrl() {
+  if (typeof window === 'undefined') return ''
+
+  const { protocol, hostname } = window.location
+
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:5000'
+  }
+
+  if (hostname.includes('frontend') && hostname.endsWith('onrender.com')) {
+    return `${protocol}//${hostname.replace('frontend', 'backend')}`
+  }
+
+  return ''
+}
+
+const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_URL) || guessBackendBaseUrl()
 const STORAGE_KEY = 'martinsdirect_auth'
 
 function apiUrl(path) {
-  return API_BASE_URL ? `${API_BASE_URL}${path}` : path
+  return `${API_BASE_URL}${path}`
 }
 
 async function apiFetch(path, options = {}, token) {
@@ -19,11 +39,12 @@ async function apiFetch(path, options = {}, token) {
     headers.Authorization = `Bearer ${token}`
   }
 
-  const response = await fetch(apiUrl(path), { ...options, headers })
+  const response = await fetch(apiUrl(path), { ...options, headers, credentials: 'include' })
   const data = await response.json().catch(() => ({}))
 
   if (!response.ok) {
-    throw new Error(data.error || data.message || 'Request failed.')
+    const baseMessage = data.error || data.message || 'Request failed.'
+    throw new Error(`${baseMessage} Endpoint: ${apiUrl(path)}`)
   }
 
   return data
@@ -82,22 +103,24 @@ function LoginScreen({ onLogin, onOpenReset }) {
     <div className="auth-shell">
       <div className="auth-backdrop" />
       <div className="auth-card">
-        <section className="auth-brand-panel">
-          <div className="auth-brand-top">
-            <Logo />
-            <span className="auth-badge">Mobile-ready secure dashboard</span>
+        <section className="auth-brand-panel auth-brand-panel-refined">
+          <div className="auth-brand-content">
+            <div className="auth-brand-top">
+              <Logo />
+              <span className="auth-badge">Secure admin access</span>
+            </div>
+
+            <div className="auth-brand-copy auth-fade-up auth-fade-delay-1">
+              <p className="auth-eyebrow">Martin's Funerals</p>
+              <h1 className="auth-brand-title">Management Platform</h1>
+              <p className="auth-copy auth-copy-refined">
+                Manage operations, payments, employee records, and platform settings from one secure, centralized dashboard.
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="auth-eyebrow">Martinsdirect Management Platform</p>
-            <h1>Sign in to manage users, payments, reports, and statements.</h1>
-            <p className="auth-copy">
-              Admin manages the full platform. Franchisees can upload bank PDF, CSV, and Excel statements, allocate payments, and edit transactions.
-            </p>
-          </div>
-          <div className="auth-feature-list">
-            <div className="auth-feature-item"><strong>Admin</strong><span>Full editing, user management, reports, password resets.</span></div>
-            <div className="auth-feature-item"><strong>Franchisee</strong><span>Statement uploads, payment allocation, transaction edits.</span></div>
-            <div className="auth-feature-item"><strong>User</strong><span>Read-only dashboard access.</span></div>
+
+          <div className="auth-brand-footer auth-fade-up auth-fade-delay-2">
+            Martin's funerals Franchising professionals nationwide
           </div>
         </section>
 
