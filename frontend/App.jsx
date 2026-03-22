@@ -1,31 +1,29 @@
 import { useEffect, useMemo, useState } from 'react'
 import './assets/styles/globals.css'
 
-function normalizeBaseUrl(value) {
-  return (value || '').trim().replace(/\/$/, '')
-}
+const RENDER_BACKEND_URL = 'https://mffsystem-backend.onrender.com'
+const API_BASE_URL = (() => {
+  const configured = (import.meta.env.VITE_API_URL || '').trim().replace(/\/$/, '')
+  if (configured) return configured
 
-function guessBackendBaseUrl() {
-  if (typeof window === 'undefined') return ''
-
-  const { protocol, hostname } = window.location
-
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'http://localhost:5000'
+  if (typeof window !== 'undefined') {
+    const { hostname, origin } = window.location
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:5000'
+    }
+    if (hostname.endsWith('.onrender.com')) {
+      return RENDER_BACKEND_URL
+    }
+    return origin
   }
 
-  if (hostname.includes('frontend') && hostname.endsWith('onrender.com')) {
-    return `${protocol}//${hostname.replace('frontend', 'backend')}`
-  }
-
-  return ''
-}
-
-const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_URL) || guessBackendBaseUrl()
+  return RENDER_BACKEND_URL
+})()
 const STORAGE_KEY = 'martinsdirect_auth'
 
 function apiUrl(path) {
-  return `${API_BASE_URL}${path}`
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${API_BASE_URL}${normalizedPath}`
 }
 
 async function apiFetch(path, options = {}, token) {
@@ -39,12 +37,12 @@ async function apiFetch(path, options = {}, token) {
     headers.Authorization = `Bearer ${token}`
   }
 
-  const response = await fetch(apiUrl(path), { ...options, headers, credentials: 'include' })
+  const endpoint = apiUrl(path)
+  const response = await fetch(endpoint, { ...options, headers })
   const data = await response.json().catch(() => ({}))
 
   if (!response.ok) {
-    const baseMessage = data.error || data.message || 'Request failed.'
-    throw new Error(`${baseMessage} Endpoint: ${apiUrl(path)}`)
+    throw new Error(data.error || data.message || `Request failed at ${endpoint}.`)
   }
 
   return data
@@ -93,7 +91,7 @@ function LoginScreen({ onLogin, onOpenReset }) {
     onLogin(data)
 
   } catch (err) {
-    setError(err.message || 'Login failed')
+    setError(err.message || `Login failed via ${apiUrl('/api/auth/login')}`)
   } finally {
     setSubmitting(false)
   }
@@ -103,24 +101,22 @@ function LoginScreen({ onLogin, onOpenReset }) {
     <div className="auth-shell">
       <div className="auth-backdrop" />
       <div className="auth-card">
-        <section className="auth-brand-panel auth-brand-panel-refined">
-          <div className="auth-brand-content">
-            <div className="auth-brand-top">
-              <Logo />
-              <span className="auth-badge">Secure admin access</span>
-            </div>
-
-            <div className="auth-brand-copy auth-fade-up auth-fade-delay-1">
-              <p className="auth-eyebrow">Martin's Funerals</p>
-              <h1 className="auth-brand-title">Management Platform</h1>
-              <p className="auth-copy auth-copy-refined">
-                Manage operations, payments, employee records, and platform settings from one secure, centralized dashboard.
-              </p>
-            </div>
+        <section className="auth-brand-panel">
+          <div className="auth-brand-top">
+            <Logo />
+            <span className="auth-badge">Mobile-ready secure dashboard</span>
           </div>
-
-          <div className="auth-brand-footer auth-fade-up auth-fade-delay-2">
-            Martin's funerals Franchising professionals nationwide
+          <div>
+            <p className="auth-eyebrow">Martinsdirect Management Platform</p>
+            <h1>Sign in to manage users, payments, reports, and statements.</h1>
+            <p className="auth-copy">
+              Admin manages the full platform. Franchisees can upload bank PDF, CSV, and Excel statements, allocate payments, and edit transactions.
+            </p>
+          </div>
+          <div className="auth-feature-list">
+            <div className="auth-feature-item"><strong>Admin</strong><span>Full editing, user management, reports, password resets.</span></div>
+            <div className="auth-feature-item"><strong>Franchisee</strong><span>Statement uploads, payment allocation, transaction edits.</span></div>
+            <div className="auth-feature-item"><strong>User</strong><span>Read-only dashboard access.</span></div>
           </div>
         </section>
 
