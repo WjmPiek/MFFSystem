@@ -113,28 +113,31 @@ function LoginScreen({ onLogin, onOpenReset }) {
     <div className="auth-shell">
       <div className="auth-backdrop" />
       <div className="auth-card">
-        <section className="auth-brand-panel">
-          <div className="auth-brand-top">
-            <Logo />
-            <span className="auth-badge">Mobile-ready secure dashboard</span>
+        <section className="auth-brand-panel auth-brand-panel-refined">
+          <div className="auth-brand-content">
+            <div className="auth-brand-top">
+              <Logo />
+              <span className="auth-badge">Secure admin access</span>
+            </div>
+
+            <div className="auth-brand-copy auth-fade-up auth-fade-delay-1">
+              <p className="auth-eyebrow">Martin&apos;s Funerals</p>
+              <h1 className="auth-brand-title">Management Platform</h1>
+              <p className="auth-copy auth-copy-refined">
+                Manage operations, payments, employee records, and platform settings
+                from one secure, centralized dashboard.
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="auth-eyebrow">Martinsdirect Management Platform</p>
-            <h1>Sign in to manage users, payments, members, reports, and statements.</h1>
-            <p className="auth-copy">
-              Admin manages the full platform. Franchisees can upload bank PDF, CSV, and Excel statements, allocate payments, and edit transactions.
-            </p>
-          </div>
-          <div className="auth-feature-list">
-            <div className="auth-feature-item"><strong>Admin</strong><span>Full editing, user management, reports, password resets.</span></div>
-            <div className="auth-feature-item"><strong>Franchisee</strong><span>Statement uploads, payment allocation, transaction edits.</span></div>
-            <div className="auth-feature-item"><strong>User</strong><span>Read-only dashboard access.</span></div>
+
+          <div className="auth-brand-footer auth-fade-up auth-fade-delay-2">
+            Martin&apos;s funerals Franchising professionals nationwide
           </div>
         </section>
 
         <section className="auth-form-panel">
           <div className="auth-form-header">
-            <p className="auth-form-kicker">Secure sign in</p>
+            <p className="auth-form-kicker">Administrator sign in</p>
             <h2>Welcome back</h2>
             <p>Use your Martinsdirect account details.</p>
           </div>
